@@ -966,3 +966,174 @@ label variable hh_credit_coop "HH main credit from cooperative"
 
 gen hh_credit_tontine = (hh_main_credit_source == 7) if hh_got_credit==1
 label variable hh_credit_tontine "HH main credit from tontine"
+
+
+********************************************************************************
+* PART 6: REMITTANCES SECTION (SECTION 13A PART 2) - HOUSEHOLD LEVEL
+********************************************************************************
+
+* This section creates household-level remittance indicators
+* s13a_2 contains transfer details (amount and frequency)
+
+*------------------------------------------------------------------------------
+* 6.1: Load Section 13A Part 2 remittance data and create hhid
+*------------------------------------------------------------------------------
+
+preserve
+    use "${data_2018}/s13a_2_me_ben2018", clear
+    gen hhid = grappe * 1000 + menage
+    label variable hhid "Household ID"
+
+    * this is also individual level data
+
+    *--------------------------------------------------------------------------
+    * Convert frequency to annual amount
+    *--------------------------------------------------------------------------
+
+    * s13aq17a = Amount sent each time
+    * s13aq17b = Frequency of transfers
+    * Frequency codes:
+    * 1 = Per month (mois)
+    * 2 = Per quarter (trimestre)
+    * 3 = Per semester (semestre)
+    * 4 = Per year (année)
+    * 5 = Irregular (irrégulier)
+
+    gen amount_remit_annual = s13aq17a
+    replace amount_remit_annual = s13aq17a * 12 if s13aq17b == 1  // Monthly
+    replace amount_remit_annual = s13aq17a * 4  if s13aq17b == 2  // Quarterly
+    replace amount_remit_annual = s13aq17a * 2  if s13aq17b == 3  // Semester
+    replace amount_remit_annual = s13aq17a * 1  if s13aq17b == 4  // Annual
+    * For irregular (5), keep as reported (assume annual)
+    replace amount_remit_annual = s13aq17a * 1  if s13aq17b == 5  // Irregular
+
+    label variable amount_remit_annual "Annual remittance amount (FCFA)"
+
+    * Sender location (for abroad indicator)
+    * Codes 1-3 = within Benin (domestic); codes 4-14 = abroad
+    gen remit_from_abroad = 0
+    replace remit_from_abroad = 1 if inrange(s13aq14, 4, 14)
+    replace remit_from_abroad = 0 if inrange(s13aq14, 1, 3)
+
+    label variable remit_from_abroad "Remittance from abroad"
+    label define remit_from_abroad 0 "Domestic (Benin)" 1 "From abroad"
+    label values remit_from_abroad remit_from_abroad
+
+    * Keep detailed location for reference
+    gen remit_sender_location = s13aq14
+    label variable remit_sender_location "Sender location (detailed)"
+
+    label define sender_location ///
+        1 "Same city/village" ///
+        2 "Same region" ///
+        3 "Elsewhere in Benin" ///
+        4 "Burkina Faso" ///
+        5 "Côte d'Ivoire" ///
+        6 "Guinée Bissau" ///
+        7 "Mali" ///
+        8 "Niger" ///
+        9 "Sénégal" ///
+        10 "Togo" ///
+        11 "Nigeria" ///
+        12 "Autre Afrique" ///
+        13 "France" ///
+        14 "Autre (hors Afrique)"
+
+    label values remit_sender_location sender_location
+
+    * Total remittances per household (sum across all transfers)
+    collapse (sum) amount_remit_annual ///
+             (max) remit_from_abroad, ///
+             by(hhid)
+
+    * Create indicator for received remittances
+    gen hh_received_remittances = 1
+    label variable hh_received_remittances "Household received remittances"
+
+    rename amount_remit_annual hh_remit_total_annual
+    label variable hh_remit_total_annual "Total annual remittances received (FCFA)"
+
+    rename remit_from_abroad hh_remit_from_abroad
+    label variable hh_remit_from_abroad "HH received remittances from abroad"
+    label define hh_remit_from_abroad 0 "Domestic only" 1 "From abroad"
+    label values hh_remit_from_abroad hh_remit_from_abroad
+
+    tempfile remittances_hh
+    save `remittances_hh'
+restore
+
+merge m:1 hhid using `remittances_hh'
+
+drop _merge
+
+********************************************************************************
+* PART 6b: BANK ACCOUNT AND INTERNET ACCESS (from ehcvm_individu)
+********************************************************************************
+
+* These variables exist in the raw ehcvm_individu data but were not kept in
+* Part 2 (which only kept demographics). We reload and merge them here.
+* Source: ehcvm_individu_ben2018 — variables "bank" and "internet"
+
+*------------------------------------------------------------------------------
+* 6b.1: Bank account — HH-level indicator
+*------------------------------------------------------------------------------
+* "bank" = has bank or other financial account (individual-level, coded 0/1)
+* We collapse to HH level: 1 if any member has an account.
+
+preserve
+    use "${data_2018}/ehcvm_individu_ben2018", clear
+    gen has_bank_ind = (bank == 1) if !missing(bank)
+    collapse (max) has_bank = has_bank_ind, by(grappe menage)
+    label variable has_bank "HH has bank/financial account"
+    tempfile bank_2018
+    save `bank_2018'
+restore
+
+merge m:1 grappe menage using `bank_2018', nogen keep(master match)
+replace has_bank = 0 if missing(has_bank)
+
+*------------------------------------------------------------------------------
+* 6b.2: Internet access — individual-level indicator
+*------------------------------------------------------------------------------
+* "internet" = individual uses internet (coded 0/1)
+
+preserve
+    use "${data_2018}/ehcvm_individu_ben2018", clear
+    keep grappe menage numind internet
+    rename internet has_internet
+    label variable has_internet "Individual has internet access"
+    tempfile internet_2018
+    save `internet_2018'
+restore
+
+merge 1:1 grappe menage numind using `internet_2018', nogen keep(master match)
+replace has_internet = 0 if missing(has_internet)
+
+
+********************************************************************************
+* PART 6c: FINAL ORGANIZATION
+********************************************************************************
+
+* Order variables
+order year vague grappe menage numind nonag_id hhid ///
+      ent_2018 sexe_2018 age_2018 hhweight_2018
+
+* Label dataset
+label data "EHCVM Benin 2018 - Cleaned"
+
+********************************************************************************
+* PART 7: SAVE
+********************************************************************************
+
+compress
+save "${intermediate}/BEN_2018_cleaned.dta", replace
+
+********************************************************************************
+* PART 8: QUALITY CHECKS
+********************************************************************************
+
+* Check duplicates
+duplicates report nonag_id
+
+* Summary for entrepreneurs
+sum revenue profit value_total if ent_2018==1 [aw=hhweight_2018], detail
