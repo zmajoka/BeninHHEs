@@ -775,3 +775,52 @@ label variable total_comp_month_sec "Total monthly compensation (secondary job, 
 * Total employment income (primary + secondary)
 egen total_emp_income_month = rowtotal(total_comp_month total_comp_month_sec)
 label variable total_emp_income_month "Total monthly employment income (both jobs, FCFA)"
+
+
+********************************************************************************
+* PART 4: MERGE HOUSEHOLD-LEVEL DATA
+********************************************************************************
+
+merge n:1 hhid using "${data_2018}/ehcvm_menage_ben2018"
+
+* Keep all individuals (with or without household data)
+keep if _merge == 1 | _merge == 3
+* This keeps: all individuals whether they matched to household or not
+* This drops: any household records without individuals
+
+tab _merge
+drop _merge
+
+*------------------------------------------------------------------------------
+* 4.1: Merge welfare data
+*------------------------------------------------------------------------------
+
+merge n:1 hhid using "${data_2018}/ehcvm_welfare_ben2018"
+
+* Keep all individuals (with or without welfare data)
+keep if _merge == 1 | _merge == 3
+* This keeps: all individuals whether they have welfare data or not
+* This drops: any welfare records without corresponding individuals
+
+tab _merge
+drop _merge
+
+*------------------------------------------------------------------------------
+* 4.2: Create location classification
+*------------------------------------------------------------------------------
+* Combines region and milieu into 4 categories:
+*   1 = Cotonou (Littoral), 2 = Porto-Novo (Ouémé, urban),
+*   3 = Other urban, 4 = Rural
+* Region codes: 8=Littoral (Cotonou), 10=Ouémé (Porto-Novo)
+* milieu: 1=Urban, 2=Rural
+* Note: Littoral (region 8) is entirely urban so no milieu condition needed
+
+gen location = .
+replace location = 1 if region == 8                           // Cotonou (Littoral)
+replace location = 2 if region == 10 & milieu == 1           // Porto-Novo (Ouémé, urban)
+replace location = 3 if milieu == 1 & !inlist(region, 8, 10) // Other urban
+replace location = 4 if milieu == 2                           // Rural
+
+label variable location "Location classification"
+label define location 1 "Cotonou" 2 "Porto-Novo" 3 "Other urban" 4 "Rural"
+label values location location
