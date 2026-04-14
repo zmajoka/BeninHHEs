@@ -890,3 +890,83 @@ label variable total_comp_month_sec "Total monthly compensation (secondary job, 
 
 egen total_emp_income_month = rowtotal(total_comp_month total_comp_month_sec)
 label variable total_emp_income_month "Total monthly employment income (both jobs, FCFA)"
+
+********************************************************************************
+* PART 4: MERGE HOUSEHOLD-LEVEL DATA
+********************************************************************************
+
+*------------------------------------------------------------------------------
+* 4.1: Merge household characteristics
+*------------------------------------------------------------------------------
+
+preserve
+    use "${data_2021}/ehcvm_menage_ben2021", clear
+    rename hhid hhid1
+    gen hhid = grappe * 1000 + menage
+
+    tempfile hhdata
+    save `hhdata', replace
+restore
+
+merge n:1 hhid using `hhdata'
+
+/*
+    Result                      Number of obs
+    -----------------------------------------
+    Not matched                             0
+    Matched                            xx,xxx  (_merge==3)
+    -----------------------------------------
+*/
+
+tab _merge
+drop _merge
+
+*------------------------------------------------------------------------------
+* 4.2: Merge welfare data
+*------------------------------------------------------------------------------
+
+* NOTE: departement variable is in the welfare file
+* departement uses same numeric codes as region in 2018
+* (8=Littoral/Cotonou, 10=Ouémé/Porto-Novo)
+* milieu is also in the welfare file
+
+preserve
+    use "${data_2021}/ehcvm_welfare_ben2021", clear
+    rename hhid hhid1
+    gen hhid = grappe * 1000 + menage
+
+    tempfile welfaredata
+    save `welfaredata', replace
+restore
+
+merge n:1 hhid using `welfaredata'
+
+/*
+    Result                      Number of obs
+    -----------------------------------------
+    Not matched                             0
+    Matched                            xx,xxx  (_merge==3)
+    -----------------------------------------
+*/
+
+tab _merge
+drop _merge
+
+*------------------------------------------------------------------------------
+* 4.3: Create location classification
+*------------------------------------------------------------------------------
+* Combines departement and milieu into 4 categories:
+*   1 = Cotonou (Littoral), 2 = Porto-Novo (Ouémé urban), 3 = Other urban, 4 = Rural
+* Departement codes: 8=Littoral/Cotonou, 10=Ouémé/Porto-Novo
+* Milieu: 1=Urban, 2=Rural
+* NOTE: departement comes from welfare file (same codes as region in 2018)
+
+gen location = .
+replace location = 1 if departement == 8                           // Cotonou (all Littoral is urban)
+replace location = 2 if departement == 10 & milieu == 1            // Porto-Novo urban
+replace location = 3 if milieu == 1 & !inlist(departement, 8, 10) // Other urban
+replace location = 4 if milieu == 2                                // Rural
+
+label variable location "Location classification"
+label define location 1 "Cotonou" 2 "Porto-Novo" 3 "Other urban" 4 "Rural"
+label values location location
