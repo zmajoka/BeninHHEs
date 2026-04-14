@@ -1268,3 +1268,56 @@ restore
 
 merge 1:1 grappe menage numind using `internet_2021', nogen keep(master match)
 replace has_internet = 0 if missing(has_internet)
+
+********************************************************************************
+* PART 7: FINAL ORGANIZATION - 2021
+********************************************************************************
+
+* year and vague already present from ehcvm_individu_ben2021 (kept in Part 2)
+
+* Order variables
+order year vague grappe menage numind nonag_id hhid ///
+      ent_2021 sexe_2021 age_2021 hhweight_2021
+
+* Label dataset
+label data "EHCVM Benin 2021 - Cleaned"
+
+********************************************************************************
+* PART 8: SAVE - 2021
+********************************************************************************
+
+compress
+save "${intermediate}/BEN_2021_cleaned.dta", replace
+
+*--- Create 5-household subset for sharing ---
+set seed 12345
+preserve
+    * Pick 5 unique households
+    bysort hhid: gen _first = (_n == 1)
+    gen _rand = runiform() if _first == 1
+    bysort hhid (_rand): replace _rand = _rand[1]
+    egen _rank = rank(_rand) if _first == 1, unique
+    bysort hhid (_rank): replace _rank = _rank[1]
+    keep if _rank <= 5
+    drop _first _rand _rank
+    save "${output}/BEN_2021_cleaned_subset5.dta", replace
+    export excel using "${output}/BEN_2021_cleaned_subset5.xlsx", firstrow(variables) replace
+    di as result "Subset saved: 5 households from 2021 data"
+restore
+
+********************************************************************************
+* PART 9: QUALITY CHECKS - 2021
+********************************************************************************
+
+* Check duplicates
+duplicates report nonag_id
+
+* Summary for entrepreneurs
+sum revenue profit value_total if ent_2021==1 [aw=hhweight_2021], detail
+
+* Summary statistics
+summarize ent_2021 employed unemployed hh_got_credit hh_received_remittances [aw=hhweight_2021]
+
+* Cross-tabulations
+tab ent_2021 cooperative if ent_2021==1 [aw=hhweight_2021]
+tab ent_2021 hh_credit_coop [aw=hhweight_2021]
