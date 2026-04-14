@@ -1112,3 +1112,159 @@ label variable hh_credit_coop "HH main credit from cooperative"
 
 gen hh_credit_tontine = (hh_main_credit_source == 7) if hh_got_credit==1
 label variable hh_credit_tontine "HH main credit from tontine"
+
+********************************************************************************
+* PART 6: REMITTANCES SECTION (SECTION 13) - HOUSEHOLD LEVEL - 2021
+********************************************************************************
+
+* This section creates household-level remittance indicators
+* Section 13_2 contains transfer details (amount and frequency)
+* CHANGED FROM 2018: file s13_2_me_ben2021 (was s13_me_ben2018)
+* CHANGED FROM 2018: s13q19 sender location (was s13aq14), codes 1-24 (was 1-14)
+* CHANGED FROM 2018: s13q22a/b amount and frequency (was s13aq17a/b)
+
+*------------------------------------------------------------------------------
+* 6.1: Load Section 13 remittance data and create hhid
+*------------------------------------------------------------------------------
+
+preserve
+    use "${data_2021}/s13_2_me_ben2021", clear
+    gen hhid = grappe * 1000 + menage
+    label variable hhid "Household ID"
+
+    *--------------------------------------------------------------------------
+    * Convert frequency to annual amount
+    *--------------------------------------------------------------------------
+
+    * s13q22a = Amount sent each time
+    * s13q22b = Frequency of transfers
+    * Frequency codes:
+    * 1 = Per month (mois)
+    * 2 = Per quarter (trimestre)
+    * 3 = Per semester (semestre)
+    * 4 = Per year (année)
+    * 5 = Irregular (irrégulier)
+
+    gen amount_remit_annual = s13q22a
+    replace amount_remit_annual = s13q22a * 12 if s13q22b == 1  // Monthly
+    replace amount_remit_annual = s13q22a * 4  if s13q22b == 2  // Quarterly
+    replace amount_remit_annual = s13q22a * 2  if s13q22b == 3  // Semester
+    replace amount_remit_annual = s13q22a * 1  if s13q22b == 4  // Annual
+    replace amount_remit_annual = s13q22a * 1  if s13q22b == 5  // Irregular (assume annual)
+
+    label variable amount_remit_annual "Annual remittance amount (FCFA)"
+
+    * Sender location (for abroad indicator)
+    * s13q19: codes 1-3 = within Benin (domestic), codes 4-24 = abroad
+    gen remit_from_abroad = 0
+    replace remit_from_abroad = 1 if inrange(s13q19, 4, 24)   // Foreign countries
+    replace remit_from_abroad = 0 if inrange(s13q19, 1, 3)    // Within Benin
+
+    label variable remit_from_abroad "Remittance from abroad"
+    label define remit_from_abroad 0 "Domestic (Benin)" 1 "From abroad"
+    label values remit_from_abroad remit_from_abroad
+
+    * Keep detailed location for reference
+    gen remit_sender_location = s13q19
+    label variable remit_sender_location "Sender location (detailed)"
+
+    label define sender_location ///
+        1  "Same city/village" ///
+        2  "Same region" ///
+        3  "Elsewhere in Benin" ///
+        4  "Bénin" ///
+        5  "Burkina Faso" ///
+        6  "Cap-Vert" ///
+        7  "Côte d'Ivoire" ///
+        8  "Gambie" ///
+        9  "Ghana" ///
+        10 "Guinée" ///
+        11 "Guinée-Bissau" ///
+        12 "Libéria" ///
+        13 "Niger" ///
+        14 "Nigeria" ///
+        15 "Mali" ///
+        16 "Serra-Leonne" ///
+        17 "Sénégal" ///
+        18 "Togo" ///
+        19 "Autre pays en Afrique" ///
+        20 "France" ///
+        21 "Espagne" ///
+        22 "Italie" ///
+        23 "Etats Unis" ///
+        24 "Autre pays hors Afrique"
+
+    label values remit_sender_location sender_location
+
+    * Total remittances per household (sum across all transfers)
+    collapse (sum) amount_remit_annual ///
+             (max) remit_from_abroad, ///
+             by(hhid)
+
+    * Create indicator for received remittances
+    gen hh_received_remittances = 1
+    label variable hh_received_remittances "Household received remittances"
+
+    rename amount_remit_annual hh_remit_total_annual
+    label variable hh_remit_total_annual "Total annual remittances received (FCFA)"
+
+    rename remit_from_abroad hh_remit_from_abroad
+    label variable hh_remit_from_abroad "HH received remittances from abroad"
+    label define hh_remit_from_abroad 0 "Domestic only" 1 "From abroad"
+    label values hh_remit_from_abroad hh_remit_from_abroad
+
+    tempfile remittances_hh
+    save `remittances_hh'
+restore
+
+merge m:1 hhid using `remittances_hh'
+
+* Fill in missing values for households without remittances
+replace hh_received_remittances = 0 if _merge == 1
+replace hh_remit_total_annual = 0 if _merge == 1
+replace hh_remit_from_abroad = 0 if _merge == 1
+
+drop _merge
+
+********************************************************************************
+* PART 6b: BANK ACCOUNT AND INTERNET ACCESS (from ehcvm_individu) - 2021
+********************************************************************************
+
+* These variables exist in the raw ehcvm_individu data but were not kept in
+* Part 2 (which only kept demographics). We reload and merge them here.
+* Source: ehcvm_individu_ben2021 — variables "bank" and "internet"
+
+*------------------------------------------------------------------------------
+* 6b.1: Bank account — HH-level indicator
+*------------------------------------------------------------------------------
+* "bank" = has bank or other financial account (individual-level, coded 1=yes)
+* We collapse to HH level: 1 if any member has an account.
+
+preserve
+    use "${data_2021}/ehcvm_individu_ben2021", clear
+    gen has_bank_ind = (bank == 1) if !missing(bank)
+    collapse (max) has_bank = has_bank_ind, by(grappe menage)
+    label variable has_bank "HH has bank/financial account"
+    tempfile bank_2021
+    save `bank_2021'
+restore
+
+merge m:1 grappe menage using `bank_2021', nogen keep(master match)
+replace has_bank = 0 if missing(has_bank)
+
+*------------------------------------------------------------------------------
+* 6b.2: Internet access — individual-level indicator
+*------------------------------------------------------------------------------
+* "internet" = individual uses internet (coded 0/1)
+
+preserve
+    use "${data_2021}/ehcvm_individu_ben2021", clear
+    keep grappe menage numind internet
+    rename internet has_internet
+    label variable has_internet "Individual has internet access"
+    tempfile internet_2021
+    save `internet_2021'
+restore
+
+merge 1:1 grappe menage numind using `internet_2021', nogen keep(master match)
+replace has_internet = 0 if missing(has_internet)
