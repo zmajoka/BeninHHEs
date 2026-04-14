@@ -456,3 +456,322 @@ drop _merge
 
 tempfile ind_data
 save `ind_data', replace
+
+********************************************************************************
+* PART 3: Load and merge Section 4 Employment Data
+********************************************************************************
+preserve
+ use "${data_2018}/s04_me_ben2018", clear
+
+gen hhid = grappe * 1000 + menage
+label variable hhid "Household ID (numeric)"
+
+  * Keep only relevant variables
+    keep grappe menage hhid s01q00a ///
+         s04q06 s04q07 s04q08 s04q09 s04q13 s04q14 /// Working status questions
+		 s04q28a s04q28b /// type of work for primary and secondary emp
+         s04q15 s04q17 s04q19 /// Job search questions
+         s04q29b s04q30b /// Occupation and industry
+         s04q32 /// Months worked
+         s04q36 s04q37 /// Days and hours worked
+         s04q39 /// Socioeconomic category
+         s04q43 s04q43_unite /// Salary primary
+         s04q44 s04q45 s04q45_unite /// Bonuses primary
+         s04q46 s04q47 s04q47_unite /// In-kind benefits primary
+         s04q48 s04q49 s04q49_unite /// Food primary
+         s04q50 /// Has secondary job
+         s04q55 s04q56 /// Secondary job days and hours
+         s04q58 s04q58_unite /// Salary secondary
+         s04q59 s04q60 s04q60_unite /// Bonuses secondary
+         s04q61 s04q62 s04q62_unite /// Benefits secondary
+         s04q63 s04q64 s04q64_unite // Food secondary
+
+    * Rename individual ID for merge
+    rename s01q00a numind
+
+	*labels in English
+	label var s04q06 "worked at least 1 hour in a field/garden/raising livestock for his/her own account in the last 7 days"
+	label var s04q07 "worked at least 1 hour, with remuneration, in a commercial/market activity for his/her own account in the last 7 days"
+	label var s04q08 "worked at least 1 hour, with remuneration, for the State/Government in the last 7 days"
+	label var s04q09 "worked at least 1 hour, with remuneration, as an apprentice in the last 7 days"
+	label var s04q13 "worked in a field/garden, for another HH member without remuneration in the last 7 days"
+	label var s04q14 "worked in a shop/business for another HH member without remuneration in the last 7 days"
+	label var s04q15 "looked for paid employment during the last 30 days"
+	label var s04q17 "looked for paid employment during the last 30 days"
+	label var s04q19 "available to work immediately"
+
+	label var s04q29b "Occupation"
+
+	*categories of occupation are different across years. To align with ISCO
+
+	recode s04q29b ///
+    (1  = 1) ///  Managers
+    (2  = 2) ///  Professionals
+    (3  = 3) ///  Technicians and associate professionals
+    (4  = 4) ///  Clerical support workers
+    (5  = 5) ///  Service and sales workers
+    (6  = 6) ///  Skilled agricultural, forestry and fishery workers
+    (7  = 7) ///  Craft and related trades workers
+    (8  = 8) ///  Plant and machine operators and assemblers
+    (9  = 9) ///  Elementary occupations
+    (10 = 0) ///  Armed forces
+    (11 = .) ///  Other — no ISCO-08 equivalent
+    (12 = .) /// No occupation — set to missing
+
+
+	label define occupation_lbl ///
+    0 "Armed forces occupations" ///
+    1 "Managers" ///
+    2 "Professionals" ///
+    3 "Technicians and associate professionals" ///
+    4 "Clerical support workers" ///
+    5 "Service and sales workers" ///
+    6 "Skilled agricultural, forestry and fishery workers" ///
+    7 "Craft and related trades workers" ///
+    8 "Plant and machine operators and assemblers" ///
+    9 "Elementary occupations"
+
+* Apply labels to variable
+label values s04q29b occupation_lbl
+
+	label var s04q30b "Industry"
+	label var s04q32 "months worked in the job in the past 12 months"
+	label var s04q36 "days per month worked in this job"
+	label var s04q37 "hours per day worked in this job"
+	label var s04q39 "socio-professional category"
+
+	label define socioprof_lbl ///
+    1  "Senior manager / executive" ///
+    2  "Middle manager / supervisor" ///
+    3  "Skilled worker or employee" ///
+    4  "Unskilled worker or employee" ///
+    5  "Labourer / domestic helper" ///
+    6  "Paid intern or apprentice" ///
+    7  "Unpaid intern or apprentice" ///
+    8  "Contributing family worker" ///
+    9  "Own-account worker (self-employed)" ///
+    10 "Employer / business owner"
+
+* Apply labels to variable
+label values s04q39 socioprof_lbl
+
+	label var s04q43 "Salary/wage for this job for the reference time period"
+	label var s04q43_unite "unit salary"
+
+    label var s04q50 "In addition to the main job, do you have a secondary job?"
+
+    tempfile employment_data
+    save `employment_data'
+restore
+
+* Merge employment data
+merge 1:1 hhid numind using `employment_data'
+
+tab _merge
+drop _merge
+
+*------------------------------------------------------------------------------
+* 3.1: PRIMARY EMPLOYMENT - Employment status
+*------------------------------------------------------------------------------
+
+* Working status (employed if worked in last 7 days)
+* Employed includes: own account work, wage work, unpaid family work
+gen employed = 0
+replace employed = 1 if s04q06==1  // Worked in field/garden for own account
+replace employed = 1 if s04q07==1  // Worked with pay for own account
+replace employed = 1 if s04q08==1  // Worked with pay for the state
+replace employed = 1 if s04q09==1  // Worked with pay as apprentice
+replace employed = 1 if s04q13==1  // Worked in field for HH member without pay
+replace employed = 1 if s04q14==1  // Worked in commerce for HH member without pay
+
+label variable employed "Employed (worked in last 7 days, paid or unpaid)"
+label define employed 0 "Not employed" 1 "Employed"
+label values employed employed
+
+* Unemployed (not working but looking for job)
+gen unemployed = 0
+replace unemployed = 1 if employed==0 & (s04q15==1 | s04q17==1)
+
+label variable unemployed "Unemployed (not working but looking and available)"
+label define unemployed 0 "Not unemployed" 1 "Unemployed"
+label values unemployed unemployed
+
+* Labor force participation (employed or unemployed)
+gen in_labor_force = (employed==1 | unemployed==1)
+label variable in_labor_force "In labor force (employed or unemployed)"
+
+gen working_age = (age >= 15 & age <= 64)
+label variable working_age "Working age population (15-64)"
+
+*------------------------------------------------------------------------------
+* 3.2: PRIMARY EMPLOYMENT - Sector and occupation
+*------------------------------------------------------------------------------
+
+* Industry/sector - recode to match enterprise categories
+recode s04q30b ///
+    (1 2   = 1 "Ag and extractives") ///
+    (3     = 2 "Manufacturing") ///
+    (4 5   = 3 "Utilities and construction") ///
+    (6 7   = 5 "Retail") ///
+    (8     = 6 "Transport") ///
+    (17    = 7 "Personal services") ///
+    (9/16 18 19 = 9 "Other"), ///
+    gen(sector_work)
+
+label variable sector_work "Sector of work (primary employment)"
+
+*------------------------------------------------------------------------------
+* 3.3: PRIMARY EMPLOYMENT - Type of employment
+*------------------------------------------------------------------------------
+
+gen emp_type = .
+replace emp_type = 1 if inrange(s04q39, 1, 7)   // Wage worker (all salaried + apprentices)
+replace emp_type = 2 if s04q39 == 9             // Own account worker (self-employed)
+replace emp_type = 3 if s04q39 == 10            // Employer
+replace emp_type = 4 if s04q39 == 8             // Unpaid family worker
+
+label variable emp_type "Type of employment"
+label define emp_type ///
+    1 "Wage worker" ///
+    2 "Own account worker" ///
+    3 "Employer" ///
+    4 "Unpaid family worker"
+label values emp_type emp_type
+
+*------------------------------------------------------------------------------
+* 3.4: PRIMARY EMPLOYMENT - Hours worked
+*------------------------------------------------------------------------------
+
+* Days per month
+gen days_worked_month = s04q36
+label variable days_worked_month "Days per month worked (primary job)"
+
+* Hours per day
+gen hours_worked_day = s04q37
+label variable hours_worked_day "Hours per day worked (primary job)"
+
+* Total hours per month
+gen hours_worked_month = days_worked_month * hours_worked_day
+label variable hours_worked_month "Total hours per month (primary job)"
+
+* Months worked in last 12 months
+gen months_worked = s04q32
+label variable months_worked "Months worked in last 12 months (primary job)"
+
+*------------------------------------------------------------------------------
+* 3.5: PRIMARY EMPLOYMENT - Salary and benefits (MONTHLY)
+*------------------------------------------------------------------------------
+
+* Unit conversion codes:
+* 1 = Week (semaine)
+* 2 = Month (mois)
+* 3 = Quarter (trimestre)
+* 4 = Year (an)
+
+* Salary (convert to monthly)
+gen salary_month = .
+replace salary_month = s04q43 * 4.33 if s04q43_unite==1    // Weekly
+replace salary_month = s04q43 if s04q43_unite==2           // Monthly
+replace salary_month = s04q43 / 3 if s04q43_unite==3       // Quarterly
+replace salary_month = s04q43 / 12 if s04q43_unite==4      // Annually
+
+label variable salary_month "Monthly salary (primary job, FCFA)"
+
+* Bonuses (convert to monthly)
+gen bonus_month = 0
+replace bonus_month = s04q45 * 4.33 if s04q44==1 & s04q45_unite==1
+replace bonus_month = s04q45 if s04q44==1 & s04q45_unite==2
+replace bonus_month = s04q45 / 3 if s04q44==1 & s04q45_unite==3
+replace bonus_month = s04q45 / 12 if s04q44==1 & s04q45_unite==4
+
+label variable bonus_month "Monthly bonuses (primary job, FCFA)"
+
+* In-kind benefits (convert to monthly)
+gen benefits_inkind_month = 0
+replace benefits_inkind_month = s04q47 * 4.33 if s04q46==1 & s04q47_unite==1
+replace benefits_inkind_month = s04q47 if s04q46==1 & s04q47_unite==2
+replace benefits_inkind_month = s04q47 / 3 if s04q46==1 & s04q47_unite==3
+replace benefits_inkind_month = s04q47 / 12 if s04q46==1 & s04q47_unite==4
+
+label variable benefits_inkind_month "Monthly in-kind benefits (primary job, FCFA)"
+
+* Food value (convert to monthly)
+gen food_value_month = 0
+replace food_value_month = s04q49 * 4.33 if s04q48==1 & s04q49_unite==1
+replace food_value_month = s04q49 if s04q48==1 & s04q49_unite==2
+replace food_value_month = s04q49 / 3 if s04q48==1 & s04q49_unite==3
+replace food_value_month = s04q49 / 12 if s04q48==1 & s04q49_unite==4
+
+label variable food_value_month "Monthly food value (primary job, FCFA)"
+
+* Total compensation (salary + bonuses + benefits + food)
+egen total_comp_month = rowtotal(salary_month bonus_month benefits_inkind_month food_value_month)
+label variable total_comp_month "Total monthly compensation (primary job, FCFA)"
+
+*------------------------------------------------------------------------------
+* 3.6: SECONDARY EMPLOYMENT
+*------------------------------------------------------------------------------
+
+* Has secondary job
+gen has_secondary_job = (s04q50==1)
+label variable has_secondary_job "Has secondary job"
+label define has_secondary_job 0 "No secondary job" 1 "Has secondary job"
+label values has_secondary_job has_secondary_job
+
+* Hours worked - secondary job
+gen days_worked_month_sec = s04q55 if has_secondary_job==1
+label variable days_worked_month_sec "Days per month (secondary job)"
+
+gen hours_worked_day_sec = s04q56 if has_secondary_job==1
+label variable hours_worked_day_sec "Hours per day (secondary job)"
+
+gen hours_worked_month_sec = days_worked_month_sec * hours_worked_day_sec
+label variable hours_worked_month_sec "Total hours per month (secondary job)"
+
+* Salary - secondary job (convert to monthly)
+gen salary_month_sec = .
+replace salary_month_sec = s04q58 * 4.33 if has_secondary_job==1 & s04q58_unite==1
+replace salary_month_sec = s04q58 if has_secondary_job==1 & s04q58_unite==2
+replace salary_month_sec = s04q58 / 3 if has_secondary_job==1 & s04q58_unite==3
+replace salary_month_sec = s04q58 / 12 if has_secondary_job==1 & s04q58_unite==4
+
+label variable salary_month_sec "Monthly salary (secondary job, FCFA)"
+
+* Bonuses - secondary job
+gen bonus_month_sec = 0
+replace bonus_month_sec = s04q60 * 4.33 if has_secondary_job==1 & s04q59==1 & s04q60_unite==1
+replace bonus_month_sec = s04q60 if has_secondary_job==1 & s04q59==1 & s04q60_unite==2
+replace bonus_month_sec = s04q60 / 3 if has_secondary_job==1 & s04q59==1 & s04q60_unite==3
+replace bonus_month_sec = s04q60 / 12 if has_secondary_job==1 & s04q59==1 & s04q60_unite==4
+
+label variable bonus_month_sec "Monthly bonuses (secondary job, FCFA)"
+
+* In-kind benefits - secondary job
+gen benefits_inkind_month_sec = 0
+replace benefits_inkind_month_sec = s04q62 * 4.33 if has_secondary_job==1 & s04q61==1 & s04q62_unite==1
+replace benefits_inkind_month_sec = s04q62 if has_secondary_job==1 & s04q61==1 & s04q62_unite==2
+replace benefits_inkind_month_sec = s04q62 / 3 if has_secondary_job==1 & s04q61==1 & s04q62_unite==3
+replace benefits_inkind_month_sec = s04q62 / 12 if has_secondary_job==1 & s04q61==1 & s04q62_unite==4
+
+label variable benefits_inkind_month_sec "Monthly benefits (secondary job, FCFA)"
+
+* Food - secondary job
+gen food_value_month_sec = 0
+replace food_value_month_sec = s04q64 * 4.33 if has_secondary_job==1 & s04q63==1 & s04q64_unite==1
+replace food_value_month_sec = s04q64 if has_secondary_job==1 & s04q63==1 & s04q64_unite==2
+replace food_value_month_sec = s04q64 / 3 if has_secondary_job==1 & s04q63==1 & s04q64_unite==3
+replace food_value_month_sec = s04q64 / 12 if has_secondary_job==1 & s04q63==1 & s04q64_unite==4
+
+label variable food_value_month_sec "Monthly food value (secondary job, FCFA)"
+
+* Total secondary compensation
+egen total_comp_month_sec = rowtotal(salary_month_sec bonus_month_sec benefits_inkind_month_sec food_value_month_sec)
+label variable total_comp_month_sec "Total monthly compensation (secondary job, FCFA)"
+
+*------------------------------------------------------------------------------
+* 3.7: COMBINED EMPLOYMENT INCOME
+*------------------------------------------------------------------------------
+
+* Total employment income (primary + secondary)
+egen total_emp_income_month = rowtotal(total_comp_month total_comp_month_sec)
+label variable total_emp_income_month "Total monthly employment income (both jobs, FCFA)"
