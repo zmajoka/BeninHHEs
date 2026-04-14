@@ -1027,17 +1027,17 @@ preserve
         1 "Same city/village" ///
         2 "Same region" ///
         3 "Elsewhere in Benin" ///
-        4 "Burkina Faso" ///
-        5 "Côte d'Ivoire" ///
-        6 "Guinée Bissau" ///
-        7 "Mali" ///
-        8 "Niger" ///
-        9 "Sénégal" ///
-        10 "Togo" ///
-        11 "Nigeria" ///
+        4 "Bénin" ///
+        5 "Burkina Faso" ///
+        6 "Côte d'Ivoire" ///
+        7 "Guinée Bissau" ///
+        8 "Mali" ///
+        9 "Niger" ///
+        10 "Sénégal" ///
+        11 "Togo" ///
         12 "Autre Afrique" ///
         13 "France" ///
-        14 "Autre (hors Afrique)"
+        14 "Autre"
 
     label values remit_sender_location sender_location
 
