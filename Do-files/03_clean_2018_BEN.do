@@ -824,3 +824,145 @@ replace location = 4 if milieu == 2                           // Rural
 label variable location "Location classification"
 label define location 1 "Cotonou" 2 "Porto-Novo" 3 "Other urban" 4 "Rural"
 label values location location
+
+********************************************************************************
+* PART 5: CREDIT SECTION (SECTION 6) - HOUSEHOLD LEVEL
+********************************************************************************
+
+* Section 6 is individual-level, so we need to aggregate to household level
+
+*------------------------------------------------------------------------------
+* 5.1: Load and merge Section 6 credit data
+*------------------------------------------------------------------------------
+
+preserve
+    use "${data_2018}/s06_me_ben2018", clear
+
+    gen hhid = grappe * 1000 + menage
+    label variable hhid "Household ID (numeric)"
+
+    * Keep only relevant variables
+    keep grappe menage hhid s01q00a ///
+         s06q05 s06q12 s06q12_autre s06q14 s06q09 s06q10
+
+    * Rename individual ID for merge
+    rename s01q00a numind
+
+    tempfile credit_data
+    save `credit_data'
+restore
+
+* Merge credit data
+merge 1:1 hhid numind using `credit_data'
+
+tab _merge
+drop _merge
+
+*------------------------------------------------------------------------------
+* 5.2: Individual-level credit indicators
+*------------------------------------------------------------------------------
+
+* Individual got credit in last 12 months (s06q05)
+gen ind_got_credit = (s06q05 == 1) if !missing(s06q05)
+label variable ind_got_credit "Individual obtained credit in last 12 months"
+
+* Individual credit source (s06q12)
+gen ind_credit_source = s06q12 if ind_got_credit==1
+label variable ind_credit_source "Source of individual's credit"
+
+label define credit_source ///
+    1 "Bank" ///
+    2 "Rural Credit Union/MFI" ///
+    3 "NGO" ///
+    4 "Supplier" ///
+    5 "Cooperative" ///
+    6 "Other Household" ///
+    7 "Tontine" ///
+    8 "Moneylender" ///
+    9 "Other"
+
+label values ind_credit_source credit_source
+
+* Individual credit amount
+gen ind_credit_amount = s06q14 if ind_got_credit==1
+label variable ind_credit_amount "Amount of individual's last credit (FCFA)"
+
+* Individual has outstanding loans from past
+gen ind_has_outstanding = (s06q09 == 1) if !missing(s06q09)
+label variable ind_has_outstanding "Individual has outstanding loans from past"
+
+* Number of outstanding loans
+gen ind_num_outstanding = s06q10 if ind_has_outstanding==1
+label variable ind_num_outstanding "Number of outstanding loans"
+
+*------------------------------------------------------------------------------
+* 5.3: HOUSEHOLD-LEVEL credit indicators
+*------------------------------------------------------------------------------
+
+* Whether ANY household member got credit
+bysort hhid: egen hh_got_credit = max(ind_got_credit)
+replace hh_got_credit = 0 if missing(hh_got_credit)
+label variable hh_got_credit "Any HH member obtained credit in last 12 months"
+label define hh_got_credit 0 "No credit" 1 "Got credit"
+label values hh_got_credit hh_got_credit
+
+* Number of household members who got credit
+bysort hhid: egen hh_num_with_credit = total(ind_got_credit)
+label variable hh_num_with_credit "Number of HH members who got credit"
+
+* Main credit source for household (most common source among HH members)
+* For households with credit, identify the most frequent source
+bysort hhid ind_credit_source: gen source_count = _N if !missing(ind_credit_source)
+bysort hhid: egen max_source_count = max(source_count)
+
+gen hh_credit_source = ind_credit_source if source_count == max_source_count & hh_got_credit==1
+bysort hhid: egen hh_main_credit_source = mode(hh_credit_source), maxmode
+drop source_count max_source_count hh_credit_source
+
+label variable hh_main_credit_source "Main credit source for household"
+label values hh_main_credit_source credit_source
+
+* Total credit amount at household level (sum of all individual credits)
+bysort hhid: egen hh_total_credit_amount = total(ind_credit_amount)
+replace hh_total_credit_amount = 0 if hh_got_credit==0
+label variable hh_total_credit_amount "Total credit amount for household (FCFA)"
+
+* Whether household has outstanding loans
+bysort hhid: egen hh_has_outstanding = max(ind_has_outstanding)
+replace hh_has_outstanding = 0 if missing(hh_has_outstanding)
+label variable hh_has_outstanding "Any HH member has outstanding loans"
+
+* Total number of outstanding loans in household
+bysort hhid: egen hh_total_outstanding = total(ind_num_outstanding)
+label variable hh_total_outstanding "Total outstanding loans in household"
+
+*------------------------------------------------------------------------------
+* 5.4: Credit source categories (for analysis)
+*------------------------------------------------------------------------------
+
+* Formal credit (bank, MFI, NGO, cooperative)
+gen hh_formal_credit = 0 if hh_got_credit==1
+replace hh_formal_credit = 1 if inlist(hh_main_credit_source, 1, 2, 3, 5)
+label variable hh_formal_credit "HH got credit from formal source"
+label define hh_formal_credit 0 "Informal source" 1 "Formal source"
+label values hh_formal_credit hh_formal_credit
+
+* Informal credit (supplier, other HH, tontine, moneylender, other)
+gen hh_informal_credit = 0 if hh_got_credit==1
+replace hh_informal_credit = 1 if inlist(hh_main_credit_source, 4, 6, 7, 8, 9)
+label variable hh_informal_credit "HH got credit from informal source"
+label define hh_informal_credit 0 "Formal source" 1 "Informal source"
+label values hh_informal_credit hh_informal_credit
+
+* Specific source dummies (for cooperative analysis)
+gen hh_credit_bank = (hh_main_credit_source == 1) if hh_got_credit==1
+label variable hh_credit_bank "HH main credit from bank"
+
+gen hh_credit_mfi = (hh_main_credit_source == 2) if hh_got_credit==1
+label variable hh_credit_mfi "HH main credit from MFI"
+
+gen hh_credit_coop = (hh_main_credit_source == 5) if hh_got_credit==1
+label variable hh_credit_coop "HH main credit from cooperative"
+
+gen hh_credit_tontine = (hh_main_credit_source == 7) if hh_got_credit==1
+label variable hh_credit_tontine "HH main credit from tontine"
