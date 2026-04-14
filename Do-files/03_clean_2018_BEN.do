@@ -358,3 +358,101 @@ label values multiple_enterprises multiple_enterprises
 
 tempfile enterprise_2018
 save `enterprise_2018', replace
+
+********************************************************************************
+* PART 2: LOAD AND PREPARE INDIVIDUAL-LEVEL DATA
+********************************************************************************
+
+use "${data_2018}/ehcvm_individu_ben2018", clear
+
+* Keep relevant variables
+* Note: numind here is the INDIVIDUAL ID from the roster (s01q00a)
+* This is different from proprietor_id which identifies enterprise owners
+* year and vague are kept directly from this dataset
+
+keep grappe menage numind hhid hhweight lien ///
+     sexe age zae milieu csp activ7j ///
+     educ_hi alfab educ_scol ///
+     year vague
+
+* Rename with _2018 suffix
+rename sexe sexe_2018
+rename age age_2018
+rename educ_hi educ_hi_2018
+rename alfab alfab_2018
+rename educ_scol educ_scol_2018
+rename activ7j activ7j_2018
+rename csp hcsp_2018
+rename hhweight hhweight_2018
+
+*------------------------------------------------------------------------------
+* 2.1: Merge ethnicity from Section 1 roster
+*------------------------------------------------------------------------------
+
+* Load ethnicity from Section 1
+preserve
+    use "${data_2018}/s01_me_ben2018", clear
+    keep grappe menage s01q00a s01q16
+    rename s01q00a numind
+    rename s01q16 ethnie_2018
+    tempfile ethnie_data
+    save `ethnie_data'
+restore
+
+* Merge ethnicity
+merge 1:1 grappe menage numind using `ethnie_data'
+
+* Keep all observations (both matched and unmatched from master)
+keep if _merge == 1 | _merge == 3
+* This keeps: individuals with or without ethnicity data
+* This drops: any ethnicity records without corresponding individuals (shouldn't exist)
+
+tab _merge
+drop _merge
+
+*------------------------------------------------------------------------------
+* 2.2: Create individual ID for merging with enterprises
+*------------------------------------------------------------------------------
+
+* Create composite ID using INDIVIDUAL ID (numind from roster)
+* This will match with enterprise data where nonag_id uses proprietor_id
+* For entrepreneurs: numind should equal proprietor_id
+* For non-entrepreneurs: they won't match to enterprises
+gen nonag_id = strofreal(grappe,"%3.0f") + "_" + ///
+               strofreal(menage,"%02.0f") + "_" + ///
+               strofreal(numind,"%02.0f")
+
+label variable nonag_id "Individual ID (cluster_household_individual)"
+
+*------------------------------------------------------------------------------
+* 2.3: Merge with enterprise data
+*------------------------------------------------------------------------------
+
+merge 1:1 nonag_id using `enterprise_2018'
+
+* Keep all individuals (entrepreneurs and non-entrepreneurs)
+keep if _merge == 1 | _merge == 3
+* This keeps: all individuals whether they have enterprises or not
+* This drops: any enterprise records without corresponding individuals (shouldn't exist)
+
+* Create entrepreneur indicator based on merge result
+gen ent_2018 = (_merge==3)
+label variable ent_2018 "Is entrepreneur in 2018"
+
+* Create proprietor flag
+* For entrepreneurs: check if this individual is the main proprietor
+* For non-entrepreneurs: will be missing
+gen is_proprietor = (numind == proprietor_id) if ent_2018==1
+replace is_proprietor = 0 if numind != proprietor_id
+label variable is_proprietor "Individual is the main proprietor (vs other HH member)"
+label define is_proprietor 0 "HH member, not proprietor" 1 "Main proprietor"
+label values is_proprietor is_proprietor
+
+* Note: proprietor_id only exists for entrepreneurs (from enterprise data)
+* So is_proprietor is only defined for ent_2018==1
+
+tab _merge
+drop _merge
+
+tempfile ind_data
+save `ind_data', replace
