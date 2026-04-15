@@ -529,3 +529,92 @@ di as result "Panel merge complete"
 tab hh_matched
 tab ind_matched
 tab ind_validated
+
+********************************************************************************
+* PART 4: CREATE ANALYSIS VARIABLES - DEMOGRAPHICS
+********************************************************************************
+
+di as text _n "=============================================="
+di as text "STEP 4: Creating analysis variables"
+di as text "=============================================="
+
+*------------------------------------------------------------------------------
+* 4.1: Age categories (for each year)
+*------------------------------------------------------------------------------
+
+foreach yr in 2018 2021 {
+    recode age_`yr' ///
+        (15/29 = 1 "15-29") ///
+        (30/44 = 2 "30-44") ///
+        (45/64 = 3 "45-64") ///
+        (65/max = 4 "65+") ///
+        (min/14 = .), ///
+        gen(age_cat_`yr')
+    label variable age_cat_`yr' "Age category (`yr')"
+}
+
+*------------------------------------------------------------------------------
+* 4.2: Urban/rural dummy (rural=1)
+*------------------------------------------------------------------------------
+
+foreach yr in 2018 2021 {
+    gen byte rural_`yr' = .
+    * milieu: 1=Urban, 2=Rural (standard EHCVM coding)
+    replace rural_`yr' = 0 if milieu_`yr' == 1
+    replace rural_`yr' = 1 if milieu_`yr' == 2
+    label variable rural_`yr' "Rural area (`yr')"
+    label define rural_`yr' 0 "Urban" 1 "Rural"
+    label values rural_`yr' rural_`yr'
+}
+
+*------------------------------------------------------------------------------
+* 4.3: Education categories
+*------------------------------------------------------------------------------
+
+* educ_hi codes: 1=Aucun 2=Maternelle 3=Primaire
+* 4=Second.gl1 5=Second.tech1 6=Second.gl2 7=Second.tech2
+* 8=Postsecondaire 9=Superieur
+
+foreach yr in 2018 2021 {
+    gen educ_cat_`yr' = .
+    replace educ_cat_`yr' = 1 if educ_hi_`yr' == 1              // No education
+    replace educ_cat_`yr' = 2 if educ_hi_`yr' == 2              // Less than primary
+    replace educ_cat_`yr' = 3 if educ_hi_`yr' == 3              // Less than secondary
+    replace educ_cat_`yr' = 4 if inrange(educ_hi_`yr', 4, 9)   // Secondary and higher
+
+    label variable educ_cat_`yr' "Education category (`yr')"
+    label define educ_cat_`yr' 1 "No education" 2 "Less than primary" 3 "Less than secondary" 4 "Secondary and higher"
+    label values educ_cat_`yr' educ_cat_`yr'
+}
+
+*------------------------------------------------------------------------------
+* 4.4: Type of activity
+*------------------------------------------------------------------------------
+
+foreach yr in 2018 2021 {
+    gen activity_type_`yr' = .
+    * emp_type codes: 1=Paid work, 2=Unpaid work, 3=Unpaid family worker,
+    *                 4=Own account worker, 5=Employer
+    replace activity_type_`yr' = 1 if ent_`yr' == 1 & in_`yr' == 1
+    replace activity_type_`yr' = 2 if employed_`yr' == 1 & ent_`yr' != 1 & ///
+        inlist(emp_type_`yr', 1, 5) & in_`yr' == 1  // paid workers and employers
+    replace activity_type_`yr' = 3 if employed_`yr' == 1 & ent_`yr' != 1 & ///
+        inlist(emp_type_`yr', 2, 3) & in_`yr' == 1  // unpaid work and unpaid family workers
+    replace activity_type_`yr' = 4 if employed_`yr' != 1 & ent_`yr' != 1 & in_`yr' == 1
+
+    label variable activity_type_`yr' "Type of activity (`yr')"
+    label define activity_type_`yr' ///
+        1 "Entrepreneur" ///
+        2 "Wage job" ///
+        3 "Non-wage job" ///
+        4 "Not working"
+    label values activity_type_`yr' activity_type_`yr'
+}
+
+*------------------------------------------------------------------------------
+* 4.5: Wage job sub-categories
+*------------------------------------------------------------------------------
+
+* formal_YYYY: from s04q38 (contributes to FNRB/CNSS in Benin)
+* public_employer_YYYY: from s04q31 (principal employer)
+* These are renamed with year suffixes in Parts 1 and 2 above.
