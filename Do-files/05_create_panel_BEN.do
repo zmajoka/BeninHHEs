@@ -458,3 +458,74 @@ tempfile data_2021
 save `data_2021'
 
 di as result "2021 data prepared: `=_N' observations"
+
+********************************************************************************
+* PART 3: MERGE 2018 AND 2021 INTO PANEL
+********************************************************************************
+
+di as text _n "=============================================="
+di as text "STEP 3: Merging into panel"
+di as text "=============================================="
+
+* Merge on grappe + menage + numind (individual-level panel)
+use `data_2018', clear
+merge 1:1 grappe menage numind using `data_2021'
+
+* Document merge results
+tab _merge
+
+* ----- Create match indicators -----
+
+* Household-level match: HH appears in both waves
+gen byte hh_matched = 0
+label variable hh_matched "Household matched across 2018 and 2021"
+
+* An HH is matched if at least one individual from that HH appears in both waves
+bysort hhid: egen has_2018 = max(in_2018)
+bysort hhid: egen has_2021 = max(in_2021)
+replace hh_matched = 1 if has_2018 == 1 & has_2021 == 1
+drop has_2018 has_2021
+
+label define hh_matched 0 "Not matched" 1 "Matched across waves"
+label values hh_matched hh_matched
+
+* Individual-level match: same person in both waves
+gen byte ind_matched = (_merge == 3)
+label variable ind_matched "Individual matched across 2018 and 2021"
+label define ind_matched 0 "Not matched" 1 "Matched across waves"
+label values ind_matched ind_matched
+
+* ----- Validate individual match with gender and age checks -----
+
+* Gender consistency check (same person should have same gender)
+gen byte gender_consistent = .
+replace gender_consistent = 1 if ind_matched == 1 & sexe_2018 == sexe_2021
+replace gender_consistent = 0 if ind_matched == 1 & sexe_2018 != sexe_2021
+label variable gender_consistent "Gender matches across waves (quality check)"
+
+* Age consistency check: age in 2021 should be ~3 years more than 2018
+gen age_diff = age_2021 - age_2018 if ind_matched == 1
+gen byte age_consistent = .
+replace age_consistent = 1 if ind_matched == 1 & inrange(age_diff, 1, 5)
+replace age_consistent = 0 if ind_matched == 1 & !inrange(age_diff, 1, 5)
+label variable age_consistent "Age difference 1-5 years across waves (quality check)"
+label variable age_diff "Age difference (2021 - 2018)"
+
+* Validated individual match: matched AND passes gender + age checks
+gen byte ind_validated = 0
+replace ind_validated = 1 if ind_matched == 1 & gender_consistent == 1 & age_consistent == 1
+label variable ind_validated "Individual validated match (ID + gender + age consistent)"
+label define ind_validated 0 "Not validated" 1 "Validated match"
+label values ind_validated ind_validated
+
+* Fill in missing year indicators
+replace in_2018 = 0 if missing(in_2018)
+replace in_2021 = 0 if missing(in_2021)
+
+* Clean up merge variable
+drop _merge
+
+di as result "Panel merge complete"
+tab hh_matched
+tab ind_matched
+tab ind_validated
