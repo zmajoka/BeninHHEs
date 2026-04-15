@@ -618,3 +618,102 @@ foreach yr in 2018 2021 {
 * formal_YYYY: from s04q38 (contributes to FNRB/CNSS in Benin)
 * public_employer_YYYY: from s04q31 (principal employer)
 * These are renamed with year suffixes in Parts 1 and 2 above.
+
+********************************************************************************
+* PART 5: CREATE ANALYSIS VARIABLES - LEVEL OF ANALYSIS INDICATORS
+********************************************************************************
+
+*------------------------------------------------------------------------------
+* 5.1: Individual-level entrepreneur dummy
+*------------------------------------------------------------------------------
+
+gen byte is_entrepreneur = (ent_2018 == 1 | ent_2021 == 1)
+label variable is_entrepreneur "Is entrepreneur in at least one wave"
+label define is_entrepreneur 0 "Not an entrepreneur" 1 "Entrepreneur"
+label values is_entrepreneur is_entrepreneur
+
+tab is_entrepreneur, mi
+
+*------------------------------------------------------------------------------
+* 5.2: Entrepreneur status across waves (4 categories)
+*------------------------------------------------------------------------------
+
+gen byte ent_status = 1
+replace ent_status = 2 if ent_2018 == 1 & ent_2021 != 1
+replace ent_status = 3 if ent_2018 != 1 & ent_2021 == 1
+replace ent_status = 4 if ent_2018 == 1 & ent_2021 == 1
+
+label variable ent_status "Entrepreneur status across waves"
+label define ent_status ///
+    1 "Not entrepreneur in either wave" ///
+    2 "Entrepreneur in 2018 only" ///
+    3 "Entrepreneur in 2021 only" ///
+    4 "Entrepreneur in both waves"
+label values ent_status ent_status
+
+tab ent_status, mi
+
+*------------------------------------------------------------------------------
+* 5.3: Household has enterprise dummy
+*------------------------------------------------------------------------------
+
+bysort hhid: egen byte hh_has_enterprise = max(is_entrepreneur)
+label variable hh_has_enterprise "Household has an entrepreneur in at least one wave"
+label define hh_has_enterprise 0 "No enterprise in HH" 1 "HH has enterprise"
+label values hh_has_enterprise hh_has_enterprise
+
+tab hh_has_enterprise, mi
+
+********************************************************************************
+* PART 5b: TRANSITION INDICATORS
+********************************************************************************
+
+*------------------------------------------------------------------------------
+* 5b.1: Entrepreneurship transition (4 categories, panel individuals only)
+*------------------------------------------------------------------------------
+
+gen ent_transition = . if ind_matched == 1
+replace ent_transition = 1 if ent_2018 == 0 & ent_2021 == 0 & ind_matched == 1
+replace ent_transition = 2 if ent_2018 == 0 & ent_2021 == 1 & ind_matched == 1
+replace ent_transition = 3 if ent_2018 == 1 & ent_2021 == 0 & ind_matched == 1
+replace ent_transition = 4 if ent_2018 == 1 & ent_2021 == 1 & ind_matched == 1
+
+label variable ent_transition "Entrepreneurship transition 2018-2021"
+label define ent_transition ///
+    1 "Not entrepreneur in either year" ///
+    2 "Entered entrepreneurship in 2021" ///
+    3 "Exited entrepreneurship in 2021" ///
+    4 "Remained entrepreneur"
+label values ent_transition ent_transition
+
+*------------------------------------------------------------------------------
+* 5b.2: Entry source for 2021 entrepreneurs (4 categories)
+*------------------------------------------------------------------------------
+
+gen ent_entry_source = . if ent_2021 == 1 & ind_matched == 1
+replace ent_entry_source = 1 if ent_2018 == 1 & ent_2021 == 1 & ind_matched == 1
+replace ent_entry_source = 2 if ent_2018 != 1 & ent_2021 == 1 & ///
+    activity_type_2018 == 2 & ind_matched == 1
+replace ent_entry_source = 3 if ent_2018 != 1 & ent_2021 == 1 & ///
+    activity_type_2018 == 3 & ind_matched == 1
+replace ent_entry_source = 4 if ent_2018 != 1 & ent_2021 == 1 & ///
+    activity_type_2018 == 4 & ind_matched == 1
+
+label variable ent_entry_source "Source of entry into entrepreneurship in 2021"
+label define ent_entry_source ///
+    1 "Was entrepreneur in 2018" ///
+    2 "Entered from wage job" ///
+    3 "Entered from non-wage job" ///
+    4 "Entered from non-work"
+label values ent_entry_source ent_entry_source
+
+*------------------------------------------------------------------------------
+* 5b.3: Exit dummy
+*------------------------------------------------------------------------------
+
+gen byte ent_exited = .
+replace ent_exited = 1 if ent_2018 == 1 & ent_2021 != 1 & ind_matched == 1
+replace ent_exited = 0 if ent_2018 == 1 & ent_2021 == 1 & ind_matched == 1
+label variable ent_exited "Exited entrepreneurship between 2018 and 2021"
+label define ent_exited 0 "Remained entrepreneur" 1 "Exited"
+label values ent_exited ent_exited
