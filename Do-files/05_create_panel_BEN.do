@@ -905,3 +905,76 @@ foreach yr in 2018 2021 {
     replace total_emp_`yr' = num_hhemp_`yr' if missing(num_emp_`yr') & ent_`yr' == 1
     label variable total_emp_`yr' "Total employees, family + non-family (`yr')"
 }
+
+********************************************************************************
+* PART 8: CREATE ANALYSIS VARIABLES - HOUSEHOLD LEVEL
+********************************************************************************
+
+*------------------------------------------------------------------------------
+* 8.1: Consumption and welfare quintiles
+*------------------------------------------------------------------------------
+
+foreach yr in 2018 2021 {
+    * Per capita consumption is pcexp (from welfare file, both waves)
+    xtile welfare_quintile_`yr' = pcexp_`yr', nq(5)
+    label variable welfare_quintile_`yr' "Welfare quintile based on consumption (`yr')"
+    label define welfare_quintile_`yr' 1 "Q1 (poorest)" 2 "Q2" 3 "Q3" 4 "Q4" 5 "Q5 (richest)"
+    label values welfare_quintile_`yr' welfare_quintile_`yr'
+}
+
+*------------------------------------------------------------------------------
+* 8.2: Per capita consumption (adult equivalent) and log transforms
+*------------------------------------------------------------------------------
+
+* Using eqadu2 (adult equivalent scale 2) for per capita measures
+foreach yr in 2018 2021 {
+    gen pc_total_cons_`yr' = dtot_`yr' / eqadu2_`yr' if eqadu2_`yr' > 0
+    gen pc_food_cons_`yr'  = dali_`yr' / eqadu2_`yr' if eqadu2_`yr' > 0
+    gen pc_nfood_cons_`yr' = dnal_`yr' / eqadu2_`yr' if eqadu2_`yr' > 0
+
+    label variable pc_total_cons_`yr' "Per capita total consumption, adult eq. (`yr')"
+    label variable pc_food_cons_`yr'  "Per capita food consumption, adult eq. (`yr')"
+    label variable pc_nfood_cons_`yr' "Per capita non-food consumption, adult eq. (`yr')"
+
+    * Log consumption
+    gen ln_pc_total_`yr' = ln(pc_total_cons_`yr')
+    gen ln_pc_food_`yr'  = ln(pc_food_cons_`yr')
+    gen ln_pc_nfood_`yr' = ln(pc_nfood_cons_`yr') if pc_nfood_cons_`yr' > 0
+
+    label variable ln_pc_total_`yr' "Log per capita total consumption (`yr')"
+    label variable ln_pc_food_`yr'  "Log per capita food consumption (`yr')"
+    label variable ln_pc_nfood_`yr' "Log per capita non-food consumption (`yr')"
+
+    * Real consumption (spatially deflated)
+    gen real_pc_total_`yr' = pc_total_cons_`yr' / def_spa_`yr' if def_spa_`yr' > 0
+    gen ln_real_pc_total_`yr' = ln(real_pc_total_`yr')
+
+    label variable real_pc_total_`yr'    "Real per capita total consumption (`yr')"
+    label variable ln_real_pc_total_`yr' "Log real per capita total consumption (`yr')"
+}
+
+*------------------------------------------------------------------------------
+* 8.3: Poverty indicator
+*------------------------------------------------------------------------------
+
+foreach yr in 2018 2021 {
+    gen poor_`yr' = (pcexp_`yr' < zref_`yr') if pcexp_`yr' != . & zref_`yr' != .
+    label variable poor_`yr' "Below poverty line (`yr')"
+    label define poor_`yr' 0 "Non-poor" 1 "Poor"
+    label values poor_`yr' poor_`yr'
+}
+
+*------------------------------------------------------------------------------
+* 8.4: Composite negative shock dummy
+*------------------------------------------------------------------------------
+
+* Shock variables (sh_id_demo, sh_co_natu, etc.) are in menage for both
+* BEN 2018 and BEN 2021 waves (confirmed from variable list)
+
+foreach yr in 2018 2021 {
+    gen neg_shock_`yr' = 0
+    replace neg_shock_`yr' = 1 if sh_id_demo_`yr' == 1 | sh_co_natu_`yr' == 1 | ///
+        sh_co_eco_`yr' == 1 | sh_id_eco_`yr' == 1 | ///
+        sh_co_vio_`yr' == 1 | sh_co_oth_`yr' == 1
+    label variable neg_shock_`yr' "Any negative shock (`yr')"
+}
