@@ -717,3 +717,191 @@ replace ent_exited = 0 if ent_2018 == 1 & ent_2021 == 1 & ind_matched == 1
 label variable ent_exited "Exited entrepreneurship between 2018 and 2021"
 label define ent_exited 0 "Remained entrepreneur" 1 "Exited"
 label values ent_exited ent_exited
+
+********************************************************************************
+* PART 6: CREATE ANALYSIS VARIABLES - HOUSEHOLD HEAD INDICATORS
+********************************************************************************
+
+*------------------------------------------------------------------------------
+* 6.1: Household head characteristics (from welfare data)
+*------------------------------------------------------------------------------
+
+* hgender_YYYY, hage_YYYY, heduc_YYYY already in data from menage merge
+
+foreach yr in 2018 2021 {
+    * HH head age categories
+    capture drop hage_cat_`yr'
+    gen hage_cat_`yr' = .
+    replace hage_cat_`yr' = 1 if hage_`yr' >= 15 & hage_`yr' <= 29
+    replace hage_cat_`yr' = 2 if hage_`yr' >= 30 & hage_`yr' <= 44
+    replace hage_cat_`yr' = 3 if hage_`yr' >= 45 & hage_`yr' <= 64
+    replace hage_cat_`yr' = 4 if hage_`yr' >= 65 & hage_`yr' < .
+    label variable hage_cat_`yr' "HH head age category (`yr')"
+    label define hage_cat_`yr' 1 "15-29" 2 "30-44" 3 "45-64" 4 "65+"
+    label values hage_cat_`yr' hage_cat_`yr'
+
+    * HH head education category (same codes as educ_hi)
+    gen heduc_cat_`yr' = .
+    replace heduc_cat_`yr' = 1 if heduc_`yr' == 1              // No education
+    replace heduc_cat_`yr' = 2 if heduc_`yr' == 2              // Less than primary
+    replace heduc_cat_`yr' = 3 if heduc_`yr' == 3              // Less than secondary
+    replace heduc_cat_`yr' = 4 if inrange(heduc_`yr', 4, 9)   // Secondary and higher
+
+    label variable heduc_cat_`yr' "HH head education category (`yr')"
+    label define heduc_cat_`yr' 1 "No education" 2 "Less than primary" 3 "Less than secondary" 4 "Secondary and higher"
+    label values heduc_cat_`yr' heduc_cat_`yr'
+}
+
+*------------------------------------------------------------------------------
+* 6.2: HH head is NOT the entrepreneur
+*------------------------------------------------------------------------------
+
+foreach yr in 2018 2021 {
+    gen byte head_not_ent_`yr' = (is_hh_head_`yr' == 1 & ent_`yr' != 1)
+    label variable head_not_ent_`yr' "HH head is not the entrepreneur (`yr')"
+}
+
+*------------------------------------------------------------------------------
+* 6.3: Share of HH members in wage jobs
+*------------------------------------------------------------------------------
+
+foreach yr in 2018 2021 {
+    gen byte has_wage_job_`yr' = (activity_type_`yr' == 2)
+    bysort hhid: egen n_wage_`yr' = total(has_wage_job_`yr')
+    bysort hhid: egen n_employed_`yr' = total(employed_`yr' == 1)
+    gen share_wage_hh_`yr' = n_wage_`yr' / n_employed_`yr' if n_employed_`yr' > 0
+    label variable share_wage_hh_`yr' "Share of employed HH members with wage job (`yr')"
+    drop has_wage_job_`yr' n_wage_`yr' n_employed_`yr'
+}
+
+********************************************************************************
+* PART 7: CREATE ANALYSIS VARIABLES - ENTERPRISE PERFORMANCE
+********************************************************************************
+
+*------------------------------------------------------------------------------
+* 7.1: GDP deflator-adjusted profits and capital (real 2018 prices)
+*------------------------------------------------------------------------------
+
+* Benin GDP deflators: 101 (2018), 105.2 (2021) — set in Part 0
+
+foreach yr in 2018 2021 {
+    gen profit_real_`yr' = profit_`yr' * (${gdpdef_2018} / ${gdpdef_`yr'}) if ent_`yr' == 1
+    label variable profit_real_`yr' "Monthly profit in real 2018 prices (`yr')"
+
+    gen value_total_real_`yr' = value_total_`yr' * (${gdpdef_2018} / ${gdpdef_`yr'}) if ent_`yr' == 1
+    label variable value_total_real_`yr' "Capital value in real 2018 prices (`yr')"
+}
+
+*------------------------------------------------------------------------------
+* 7.2: Log transformations
+*------------------------------------------------------------------------------
+
+foreach yr in 2018 2021 {
+    gen log_profit_`yr' = ln(profit_`yr') if profit_`yr' > 0 & ent_`yr' == 1
+    label variable log_profit_`yr' "Log of monthly profit (`yr')"
+
+    gen log_capital_`yr' = ln(value_total_`yr') if value_total_`yr' > 0 & ent_`yr' == 1
+    label variable log_capital_`yr' "Log of capital value (`yr')"
+}
+
+*------------------------------------------------------------------------------
+* 7.3: Changes between years (panel enterprises only)
+*------------------------------------------------------------------------------
+
+gen change_profit_real = profit_real_2021 - profit_real_2018 ///
+    if ent_2018 == 1 & ent_2021 == 1 & ind_matched == 1
+label variable change_profit_real "Change in real profit (2021 - 2018)"
+
+gen change_capital_real = value_total_real_2021 - value_total_real_2018 ///
+    if ent_2018 == 1 & ent_2021 == 1 & ind_matched == 1
+label variable change_capital_real "Change in real capital value (2021 - 2018)"
+
+gen change_num_emp = num_emp_2021 - num_emp_2018 ///
+    if ent_2018 == 1 & ent_2021 == 1 & ind_matched == 1
+label variable change_num_emp "Change in non-family employees (2021 - 2018)"
+
+gen change_num_hhemp = num_hhemp_2021 - num_hhemp_2018 ///
+    if ent_2018 == 1 & ent_2021 == 1 & ind_matched == 1
+label variable change_num_hhemp "Change in family employees (2021 - 2018)"
+
+gen growth_profit = .
+replace growth_profit = ((profit_real_2021 / profit_real_2018) - 1) ///
+    if profit_real_2018 > 0 & profit_real_2021 > 0 & ///
+    ent_2018 == 1 & ent_2021 == 1 & ind_matched == 1
+label variable growth_profit "Annual growth rate of real profits"
+
+gen byte profit_increased = (change_profit_real > 0) ///
+    if ent_2018 == 1 & ent_2021 == 1 & ind_matched == 1 & !missing(change_profit_real)
+label variable profit_increased "Enterprise increased real profits 2018-2021"
+
+gen byte capital_increased = (change_capital_real > 0) ///
+    if ent_2018 == 1 & ent_2021 == 1 & ind_matched == 1 & !missing(change_capital_real)
+label variable capital_increased "Enterprise increased real capital 2018-2021"
+
+*------------------------------------------------------------------------------
+* 7.4: Profit categories
+*------------------------------------------------------------------------------
+
+foreach yr in 2018 2021 {
+    gen profit_cat_`yr' = .
+    replace profit_cat_`yr' = 1 if profit_`yr' < 0 & ent_`yr' == 1
+    replace profit_cat_`yr' = 2 if profit_`yr' == 0 & ent_`yr' == 1
+    replace profit_cat_`yr' = 3 if profit_`yr' > 0 & profit_`yr' < . & ent_`yr' == 1
+    label variable profit_cat_`yr' "Profit category (`yr')"
+    label define profit_cat_`yr' 1 "Negative/loss" 2 "Zero" 3 "Positive"
+    label values profit_cat_`yr' profit_cat_`yr'
+}
+
+*------------------------------------------------------------------------------
+* 7.5: Formality indicators
+*------------------------------------------------------------------------------
+
+* firm_keeps_accounts_YYYY, firm_has_fisc_id_YYYY, firm_in_trade_register_YYYY
+* already renamed with year suffixes in Parts 1 and 2.
+* formal_YYYY (FNRB/CNSS pension contribution) available for wage workers.
+
+*------------------------------------------------------------------------------
+* 7.6: Firm age categories
+*------------------------------------------------------------------------------
+
+foreach yr in 2018 2021 {
+    local survey_year = `yr'
+    gen firm_age_`yr' = `survey_year' - year_est_`yr' if ent_`yr' == 1
+    label variable firm_age_`yr' "Firm age in years (`yr')"
+
+    recode year_est_`yr' ///
+        (min/1999 = 1 "Before 2000") ///
+        (2000/2009 = 2 "2000-2009") ///
+        (2010/2014 = 3 "2010-2014") ///
+        (2015/2021 = 4 "2015+"), ///
+        gen(year_est_cat_`yr')
+    label variable year_est_cat_`yr' "Year established category (`yr')"
+}
+
+*------------------------------------------------------------------------------
+* 7.7: Value added per worker
+*------------------------------------------------------------------------------
+
+foreach yr in 2018 2021 {
+    * Total workers = proprietor (1) + family workers + non-family workers
+    gen total_workers_`yr' = 1 + num_hhemp_`yr' + num_emp_`yr' if ent_`yr' == 1
+    replace total_workers_`yr' = 1 if total_workers_`yr' == 0 & ent_`yr' == 1
+
+    * Value added = revenue - expenses + wages (wages added back since in expenses)
+    gen value_added_`yr' = revenue_`yr' - expenses_`yr' + val_hired_labor_`yr' if ent_`yr' == 1
+    replace value_added_`yr' = revenue_`yr' - expenses_`yr' if missing(val_hired_labor_`yr') & ent_`yr' == 1
+    label variable value_added_`yr' "Value added (`yr')"
+
+    gen va_per_worker_`yr' = value_added_`yr' / total_workers_`yr' if ent_`yr' == 1
+    label variable va_per_worker_`yr' "Value added per worker (`yr')"
+}
+
+*------------------------------------------------------------------------------
+* 7.8: Total employees (family + non-family)
+*------------------------------------------------------------------------------
+
+foreach yr in 2018 2021 {
+    gen total_emp_`yr' = num_hhemp_`yr' + num_emp_`yr' if ent_`yr' == 1
+    replace total_emp_`yr' = num_hhemp_`yr' if missing(num_emp_`yr') & ent_`yr' == 1
+    label variable total_emp_`yr' "Total employees, family + non-family (`yr')"
+}
