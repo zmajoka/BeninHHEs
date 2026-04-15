@@ -978,3 +978,105 @@ foreach yr in 2018 2021 {
         sh_co_vio_`yr' == 1 | sh_co_oth_`yr' == 1
     label variable neg_shock_`yr' "Any negative shock (`yr')"
 }
+
+
+********************************************************************************
+* PART 9: VARIABLE FOR YEAR IDENTIFIER (LONG-FORMAT COMPATIBLE)
+********************************************************************************
+
+* The dataset is in wide format. Add a year variable for reference.
+* For analysis requiring long format, reshape can be done downstream.
+
+* Ensure year variable exists (may come from raw 2018 data)
+capture gen year = 2018
+replace year = 2021 if in_2018 == 0 & in_2021 == 1
+replace year = .    if in_2018 == 1 & in_2021 == 1  // panel individuals observed in both
+label variable year "Survey year (missing if observed in both waves)"
+
+
+********************************************************************************
+* PART 10: ORDER AND LABEL FINAL DATASET
+********************************************************************************
+
+* Order key identification variables first
+order grappe menage numind hhid ///
+      in_2018 in_2021 hh_matched ind_matched ind_validated ///
+      gender_consistent age_consistent age_diff ///
+      year ///
+      ent_2018 ent_2021 ///
+      ent_transition ent_entry_source ent_exited ///
+      sexe_2018 sexe_2021 age_2018 age_2021 ///
+      age_cat_2018 age_cat_2021 ///
+      milieu_2018 milieu_2021 rural_2018 rural_2021 ///
+      educ_cat_2018 educ_cat_2021 ///
+      activity_type_2018 activity_type_2021
+
+label data "EHCVM Benin Panel 2018-2021"
+
+* Compress to reduce file size
+compress
+
+
+********************************************************************************
+* PART 11: SAVE
+********************************************************************************
+
+save "${final}/BEN_panel_2018_2021.dta", replace
+
+di as result "Panel dataset saved: ${final}/BEN_panel_2018_2021.dta"
+di as result "Observations: `=_N'"
+
+* Summary statistics
+di as text _n "=============================================="
+di as text "PANEL SUMMARY"
+di as text "=============================================="
+di as text "Total observations: `=_N'"
+count if in_2018 == 1
+di as text "In 2018: `r(N)'"
+count if in_2021 == 1
+di as text "In 2021: `r(N)'"
+count if hh_matched == 1
+di as text "In matched households: `r(N)'"
+count if ind_matched == 1
+di as text "Individuals matched: `r(N)'"
+count if ind_validated == 1
+di as text "Individuals validated (gender+age): `r(N)'"
+
+tab ent_transition if ind_matched == 1
+tab ent_entry_source if ind_matched == 1
+
+
+********************************************************************************
+* DONE
+********************************************************************************
+
+di as text _n "=============================================="
+di as result "PANEL CREATION COMPLETE"
+di as text "=============================================="
+di as text ""
+di as text "Output files:"
+di as text "  1. ${final}/BEN_panel_2018_2021.dta"
+di as text ""
+di as text "Key variables created:"
+di as text "  - hh_matched: HH appears in both waves"
+di as text "  - ind_matched: Individual appears in both waves"
+di as text "  - ind_validated: Individual match confirmed by gender + age"
+di as text "  - ent_transition: Entrepreneurship transition (4 categories)"
+di as text "  - ent_entry_source: Source of entry for 2021 entrepreneurs"
+di as text "  - ent_exited: Dummy for 2018 entrepreneurs who exited"
+di as text "  - age_cat_YYYY: Age categories (15-29, 30-44, 45-64, 65+)"
+di as text "  - educ_cat_YYYY: Education (no educ, < primary, < secondary, secondary+)"
+di as text "  - rural_YYYY: Rural dummy"
+di as text "  - activity_type_YYYY: Entrepreneur/wage/non-wage/not working"
+di as text "  - formal_YYYY: Formal employment (FNRB/CNSS contribution)"
+di as text "  - public_employer_YYYY: Public sector employer"
+di as text "  - profit_real_YYYY: GDP deflator-adjusted profit (2018 prices)"
+di as text "  - log_profit_YYYY, log_capital_YYYY: Log transformations"
+di as text "  - change_profit_real, change_capital_real: Real changes"
+di as text "  - change_num_emp, change_num_hhemp: Employee changes"
+di as text "  - growth_profit: Profit growth rate"
+di as text "  - firm_keeps_accounts_YYYY, firm_has_fisc_id_YYYY, firm_in_trade_register_YYYY: Firm formality"
+di as text "  - va_per_worker_YYYY: Value added per worker"
+di as text "  - welfare_quintile_YYYY: Consumption quintiles"
+di as text "  - share_wage_hh_YYYY: Share of HH in wage jobs"
+di as text "  - neg_shock_YYYY: Any negative shock in that year"
