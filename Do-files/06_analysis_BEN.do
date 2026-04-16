@@ -1331,3 +1331,93 @@ sum _dec [aw=hhweight_2018] if ent_2018 == 1 & ent_2021 == 1 & ind_matched == 1
 putexcel B`row' = "Productivity decreased"
 putexcel C`row' = (r(mean) * 100), nformat("0.0")
 drop _dec
+
+
+********************************************************************************
+* PART 10: SECTION 4 — GROWTH POTENTIAL
+********************************************************************************
+
+di as text _n "=============================================="
+di as text "SECTION 4: GROWTH POTENTIAL"
+di as text "=============================================="
+
+putexcel set "${xlout}", sheet("S4_GrowthPotential") modify
+putexcel B1 = "Section 4: Enterprises with Growth Potential"
+putexcel B3 = "Indicator" C3 = "Value"
+local row = 4
+
+* Condition: matched enterprises present in both waves
+local cond "ent_status == 4"
+
+* Share that increased non-HH employees
+putexcel B`row' = "Share that increased non-HH employees (%)"
+gen byte _inc_emp = (change_num_emp > 0 & !missing(change_num_emp)) if `cond'
+sum _inc_emp [aw=hhweight_2018] if `cond'
+putexcel C`row' = (r(mean) * 100), nformat("0.0")
+local row = `row' + 1
+
+* Share that increased real capital
+putexcel B`row' = "Share that increased real capital (%)"
+gen byte _inc_cap = (capital_increased == 1) if `cond'
+sum _inc_cap [aw=hhweight_2018] if `cond'
+putexcel C`row' = (r(mean) * 100), nformat("0.0")
+local row = `row' + 1
+
+* Share that increased either
+putexcel B`row' = "Share that increased employees or capital (%)"
+gen byte _inc_either = (_inc_emp == 1 | _inc_cap == 1) if `cond'
+sum _inc_either [aw=hhweight_2018] if `cond'
+putexcel C`row' = (r(mean) * 100), nformat("0.0")
+local row = `row' + 1
+
+* Share that increased both
+putexcel B`row' = "Share that increased employees and capital (%)"
+gen byte _inc_both = (_inc_emp == 1 & _inc_cap == 1) if `cond'
+sum _inc_both [aw=hhweight_2018] if `cond'
+putexcel C`row' = (r(mean) * 100), nformat("0.0")
+
+drop _inc_emp _inc_cap _inc_either _inc_both
+
+
+********************************************************************************
+* PART 11: SECTION 4 — LOW ENTRY BARRIERS / STEPPING STONE
+********************************************************************************
+
+di as text _n "=============================================="
+di as text "SECTION 4: ENTRY, EXIT, AND STEPPING STONE"
+di as text "=============================================="
+
+tabout ent_exited total [iweight=hhweight_2021] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1(Share discontinued operations 2018-2021)
+tabout ent_transition total if ent_2021==1 [iweight=hhweight_2021] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1(Share of 2021 enterprises that are new entrants in 2021)
+tabout ent_entry_source total if ent_2021==1 [iweight=hhweight_2021] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1(Source of entry for all enterprises in 2021)
+tabout ent_entry_source total if ent_2021==1 & ent_entry_source!=1 [iweight=hhweight_2021] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1(Source of entry for new enterprises in 2021)
+tabout activity_type_2021 total if ent_2018==1 & ent_2021==0 [iweight=hhweight_2021] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1(Current activity of those who were entrepreneurs in 2018 but left)
+
+putexcel set "${xlout}", sheet("S4_EntryExit") modify
+putexcel B1 = "Section 4: Low Entry Barriers and Stepping Stone"
+putexcel B3 = "Low Entry Barriers" C3 = "Value"
+
+local row = 4
+
+* Share that discontinued operations (2018 entrepreneurs who exited)
+putexcel B`row' = "Share discontinued operations 2018-2021 (%)"
+sum ent_exited [aw=hhweight_2018] if ent_2018 == 1 & ind_matched == 1
+putexcel C`row' = (r(mean) * 100), nformat("0.0")
+local row = `row' + 1
+
+* Stepping stone
+putexcel B`row' = "Household Enterprises as Stepping Stone"
+local row = `row' + 1
+putexcel B`row' = "Indicator" C`row' = "Share (%)"
+local row = `row' + 1
+
+* Share with increased real profits (panel enterprises)
+putexcel B`row' = "Enterprises with increased real profits"
+sum profit_increased [aw=hhweight_2018] if ent_status==4
+putexcel C`row' = (r(mean) * 100), nformat("0.0")
+local row = `row' + 1
+
+* Share with increased TFP
+putexcel B`row' = "Enterprises with increased TFP"
+sum tfp_increased [aw=hhweight_2018] if ent_status==4
+putexcel C`row' = (r(mean) * 100), nformat("0.0")
