@@ -1576,3 +1576,419 @@ sum n_hh_wage_2021 [aw=hhweight_2018] if ent_entry_source == 4
 if r(N) > 0 putexcel C`row' = r(mean), nformat("0.00")
 
 drop _ent_to_wage
+
+
+********************************************************************************
+* PART 13: GRAPH — HH ENTERPRISE EMPLOYMENT: YOUTH VS ADULTS
+********************************************************************************
+
+di as text _n "=============================================="
+di as text "GRAPH: Youth vs Adult HH Enterprise Employment"
+di as text "=============================================="
+
+* Compute share of non-farm employment in HH enterprises by age group
+* Non-farm = sector_work != 1 (excludes agriculture and extractives)
+* Youth = 15-24, Adults = 25+
+
+preserve
+
+    * We need 4 data points: Youth & Adults × 2018 & 2021
+    * Build a small dataset with the computed shares
+
+    * --- 2018 ---
+    * Youth non-farm employed
+    count if employed_2018 == 1 & sector_work_2018 != 1 & !missing(sector_work_2018) ///
+        & age_2018 >= 15 & age_2018 <= 24
+    local nf_youth_18 = r(N)
+    * Youth in HH enterprises (ent == 1 is a subset of non-farm employed)
+    count if ent_2018 == 1 & age_2018 >= 15 & age_2018 <= 24
+    local ent_youth_18 = r(N)
+
+    * Adults non-farm employed
+    count if employed_2018 == 1 & sector_work_2018 != 1 & !missing(sector_work_2018) ///
+        & age_2018 >= 25 & age_2018 < .
+    local nf_adult_18 = r(N)
+    * Adults in HH enterprises
+    count if ent_2018 == 1 & age_2018 >= 25 & age_2018 < .
+    local ent_adult_18 = r(N)
+
+    * Weighted versions
+    sum hhweight_2018 if employed_2018 == 1 & sector_work_2018 != 1 ///
+        & !missing(sector_work_2018) & age_2018 >= 15 & age_2018 <= 24
+    local w_nf_youth_18 = r(sum)
+    sum hhweight_2018 if ent_2018 == 1 & age_2018 >= 15 & age_2018 <= 24
+    local w_ent_youth_18 = r(sum)
+
+    sum hhweight_2018 if employed_2018 == 1 & sector_work_2018 != 1 ///
+        & !missing(sector_work_2018) & age_2018 >= 25 & age_2018 < .
+    local w_nf_adult_18 = r(sum)
+    sum hhweight_2018 if ent_2018 == 1 & age_2018 >= 25 & age_2018 < .
+    local w_ent_adult_18 = r(sum)
+
+    * --- 2021 ---
+    sum hhweight_2021 if employed_2021 == 1 & sector_work_2021 != 1 ///
+        & !missing(sector_work_2021) & age_2021 >= 15 & age_2021 <= 24
+    local w_nf_youth_21 = r(sum)
+    sum hhweight_2021 if ent_2021 == 1 & age_2021 >= 15 & age_2021 <= 24
+    local w_ent_youth_21 = r(sum)
+
+    sum hhweight_2021 if employed_2021 == 1 & sector_work_2021 != 1 ///
+        & !missing(sector_work_2021) & age_2021 >= 25 & age_2021 < .
+    local w_nf_adult_21 = r(sum)
+    sum hhweight_2021 if ent_2021 == 1 & age_2021 >= 25 & age_2021 < .
+    local w_ent_adult_21 = r(sum)
+
+    * Compute shares
+    local sh_youth_18 = `w_ent_youth_18' / `w_nf_youth_18'
+    local sh_adult_18 = `w_ent_adult_18' / `w_nf_adult_18'
+    local sh_youth_21 = `w_ent_youth_21' / `w_nf_youth_21'
+    local sh_adult_21 = `w_ent_adult_21' / `w_nf_adult_21'
+
+    * Build plotting dataset
+    clear
+    set obs 2
+    gen float ypos = .
+    gen float youth = .
+    gen float adult = .
+    replace ypos  = 2 in 1
+    replace youth = `sh_youth_18' in 1
+    replace adult = `sh_adult_18' in 1
+    replace ypos  = 1 in 2
+    replace youth = `sh_youth_21' in 2
+    replace adult = `sh_adult_21' in 2
+
+    * Labels for y-axis
+    label define country_lbl 2 "BEN (2018)" 1 "BEN (2021)"
+    label values ypos country_lbl
+
+    * Cleveland dot plot with connecting lines (Teal-Terracotta palette)
+    twoway ///
+        (pcspike ypos youth ypos adult, ///
+            horizontal lcolor("232 224 208") lwidth(medium)) ///
+        (scatter ypos youth, ///
+            msymbol(circle) msize(large) mcolor("193 68 14") ///
+            mlwidth(none)) ///
+        (scatter ypos adult, ///
+            msymbol(triangle) msize(large) mcolor("60 168 158") ///
+            mlwidth(none)) ///
+        , ///
+        ytitle("") ///
+        ylabel(1 "BEN (2021)" 2 "BEN (2018)", angle(0) labsize(medium) nogrid) ///
+        yscale(range(0.5 2.5)) ///
+        xtitle("Share of non-farm employment in household enterprises", size(small)) ///
+        xlabel(, format(%4.2f) grid gstyle(dot)) ///
+        title("Household enterprise employment: youth vs adults", size(medium)) ///
+        legend(order(2 "Youth (15{&ndash}24)" 3 "Adults (25+)") ///
+            rows(1) position(6) size(small) ///
+            symxsize(4) region(lcolor(none))) ///
+        plotregion(margin(l=2 r=2)) ///
+        graphregion(color(white)) ///
+        scheme(s2color) ///
+        name(youth_vs_adults, replace)
+
+    graph export "${output}/youth_vs_adults_hh_enterprise.png", replace width(1200)
+    graph save "${output}/youth_vs_adults_hh_enterprise.gph", replace
+
+restore
+
+* Also export the shares to Excel
+putexcel set "${xlout}", sheet("S1_YouthAdults") modify
+putexcel B1 = "HH Enterprise Employment: Youth vs Adults"
+putexcel B2 = "Share of non-farm employment in household enterprises (weighted)"
+putexcel B4 = "Country-Year" C4 = "Youth (15-24)" D4 = "Adults (25+)"
+putexcel B5 = "BEN (2018)"
+putexcel C5 = `sh_youth_18', nformat("0.000")
+putexcel D5 = `sh_adult_18', nformat("0.000")
+putexcel B6 = "BEN (2021)"
+putexcel C6 = `sh_youth_21', nformat("0.000")
+putexcel D6 = `sh_adult_21', nformat("0.000")
+
+
+********************************************************************************
+* ENTERPRISE SECTOR DISAGGREGATION BY LOCATION (2021)
+********************************************************************************
+
+* location_2021 created in 03_clean_2021.do:
+*   1 = Cotonou (urban only), 2 = Porto-Novo (urban only),
+*   3 = Other urban, 4 = Rural
+
+* Sector labels (from s10q17a recode)
+local sec_1 "Ag and extractives"
+local sec_2 "Manufacturing"
+local sec_3 "Utilities & construction"
+local sec_5 "Retail"
+local sec_6 "Transport"
+local sec_7 "Personal services"
+local sec_9 "Other"
+
+* Sector codes in order
+local sec_codes 1 2 3 5 6 7 9
+
+* Compute share of enterprises in each sector, by location (columns sum to 100)
+* Using 2021 enterprise owners only, weighted
+foreach loc in 1 2 3 4 {
+    * Total weighted enterprises in this location
+    sum ent_2021 [aw=hhweight_2021] if ent_2021 == 1 & location_2021 == `loc'
+    local tot_`loc' = r(sum_w)
+
+    foreach s of local sec_codes {
+        gen byte _sec_`s' = (sector_2021 == `s') if ent_2021 == 1 & location_2021 == `loc'
+        sum _sec_`s' [aw=hhweight_2021] if ent_2021 == 1 & location_2021 == `loc'
+        local sh_`s'_`loc' = r(mean) * 100
+        drop _sec_`s'
+    }
+}
+
+* Write to Excel
+putexcel set "${xlout}", sheet("Sector_by_Location") modify
+putexcel B1 = "Enterprise Sector Distribution by Location (2021)"
+putexcel B2 = "Share of enterprises by sector within each location (%, weighted)"
+putexcel B3 = "Each column sums to 100"
+
+putexcel B5 = "Sector" C5 = "Cotonou" D5 = "Porto-Novo" E5 = "Other urban" F5 = "Rural"
+
+local row = 6
+foreach s of local sec_codes {
+    putexcel B`row' = "`sec_`s''"
+    putexcel C`row' = `sh_`s'_1', nformat("0.0")
+    putexcel D`row' = `sh_`s'_2', nformat("0.0")
+    putexcel E`row' = `sh_`s'_3', nformat("0.0")
+    putexcel F`row' = `sh_`s'_4', nformat("0.0")
+    local row = `row' + 1
+}
+
+* Add totals row
+putexcel B`row' = "Total"
+putexcel C`row' = formula("=SUM(C6:C12)"), nformat("0.0")
+putexcel D`row' = formula("=SUM(D6:D12)"), nformat("0.0")
+putexcel E`row' = formula("=SUM(E6:E12)"), nformat("0.0")
+putexcel F`row' = formula("=SUM(F6:F12)"), nformat("0.0")
+
+local row = `row' + 2
+putexcel B`row' = "N (weighted enterprises)"
+putexcel C`row' = `tot_1', nformat("#,##0")
+putexcel D`row' = `tot_2', nformat("#,##0")
+putexcel E`row' = `tot_3', nformat("#,##0")
+putexcel F`row' = `tot_4', nformat("#,##0")
+
+
+********************************************************************************
+* CREDIT SOURCES BY ENTERPRISE STATUS (2021, Module 6)
+********************************************************************************
+
+* Credit access and source shares for entrepreneurs vs non-entrepreneurs
+* Using HH-level credit variables from 2021 cleaning file
+
+putexcel set "${xlout}", sheet("Credit_by_Enterprise") modify
+putexcel B1 = "Sources of Credit by Enterprise Status (2021)"
+putexcel B2 = "Share of households (%, weighted)"
+
+putexcel B4 = "" C4 = "Entrepreneurs" D4 = "Non-entrepreneurs"
+
+local row = 5
+
+* a) Got any credit
+putexcel B`row' = "Got credit (any source)"
+foreach g in 1 0 {
+    local col = cond(`g'==1, "C", "D")
+    sum hh_got_credit_2021 [aw=hhweight_2021] if ent_2021 == `g'
+    local _mean = r(mean)
+    putexcel `col'`row' = (`_mean' * 100), nformat("0.0")
+}
+local row = `row' + 1
+
+* b) Formal vs informal (among those with credit)
+putexcel B`row' = "  Formal source"
+foreach g in 1 0 {
+    local col = cond(`g'==1, "C", "D")
+    sum hh_formal_credit_2021 [aw=hhweight_2021] if ent_2021 == `g' & hh_got_credit_2021 == 1
+    local _mean = r(mean)
+    putexcel `col'`row' = (`_mean' * 100), nformat("0.0")
+}
+local row = `row' + 1
+
+putexcel B`row' = "  Informal source"
+foreach g in 1 0 {
+    local col = cond(`g'==1, "C", "D")
+    sum hh_informal_credit_2021 [aw=hhweight_2021] if ent_2021 == `g' & hh_got_credit_2021 == 1
+    local _mean = r(mean)
+    putexcel `col'`row' = (`_mean' * 100), nformat("0.0")
+}
+local row = `row' + 1
+
+* c) Specific sources (among those with credit)
+putexcel B`row' = "Credit source breakdown (among HHs with credit):"
+local row = `row' + 1
+
+local src_lab_1 "  Bank"
+local src_lab_2 "  MFI/Rural Credit Union"
+local src_lab_3 "  Cooperative"
+local src_lab_4 "  Tontine"
+local src_var_1 "hh_credit_bank_2021"
+local src_var_2 "hh_credit_mfi_2021"
+local src_var_3 "hh_credit_coop_2021"
+local src_var_4 "hh_credit_tontine_2021"
+
+forvalues i = 1/4 {
+    putexcel B`row' = "`src_lab_`i''"
+    foreach g in 1 0 {
+        local col = cond(`g'==1, "C", "D")
+        sum `src_var_`i'' [aw=hhweight_2021] if ent_2021 == `g' & hh_got_credit_2021 == 1
+        local _mean = r(mean)
+        putexcel `col'`row' = (`_mean' * 100), nformat("0.0")
+    }
+    local row = `row' + 1
+}
+
+* d) Mean credit amount (among those with credit)
+putexcel B`row' = "Mean credit amount (FCFA)"
+foreach g in 1 0 {
+    local col = cond(`g'==1, "C", "D")
+    sum hh_total_credit_amount_2021 [aw=hhweight_2021] if ent_2021 == `g' & hh_got_credit_2021 == 1
+    local _mean = r(mean)
+    putexcel `col'`row' = `_mean', nformat("#,##0")
+}
+local row = `row' + 1
+
+* e) Has outstanding loans
+putexcel B`row' = "Has outstanding loans"
+foreach g in 1 0 {
+    local col = cond(`g'==1, "C", "D")
+    sum hh_has_outstanding_2021 [aw=hhweight_2021] if ent_2021 == `g'
+    local _mean = r(mean)
+    putexcel `col'`row' = (`_mean' * 100), nformat("0.0")
+}
+local row = `row' + 2
+
+* Sample sizes
+putexcel B`row' = "N (households)"
+sum ent_2021 [aw=hhweight_2021] if ent_2021 == 1
+local _N = r(N)
+putexcel C`row' = `_N', nformat("#,##0")
+sum ent_2021 [aw=hhweight_2021] if ent_2021 == 0
+local _N = r(N)
+putexcel D`row' = `_N', nformat("#,##0")
+
+
+********************************************************************************
+* REMITTANCES BY ENTERPRISE STATUS (2021, Module 13)
+********************************************************************************
+
+putexcel set "${xlout}", sheet("Remittances_by_Enterprise") modify
+putexcel B1 = "Remittances Received by Enterprise Status (2021)"
+putexcel B2 = "Share of households (%, weighted)"
+
+putexcel B4 = "" C4 = "Entrepreneurs" D4 = "Non-entrepreneurs"
+
+local row = 5
+
+* a) Received any remittances
+putexcel B`row' = "Received remittances"
+foreach g in 1 0 {
+    local col = cond(`g'==1, "C", "D")
+    sum hh_received_remittances_2021 [aw=hhweight_2021] if ent_2021 == `g'
+    local _mean = r(mean)
+    putexcel `col'`row' = (`_mean' * 100), nformat("0.0")
+}
+local row = `row' + 1
+
+* b) Remittances from abroad (among those receiving)
+putexcel B`row' = "  From abroad"
+foreach g in 1 0 {
+    local col = cond(`g'==1, "C", "D")
+    sum hh_remit_from_abroad_2021 [aw=hhweight_2021] if ent_2021 == `g' & hh_received_remittances_2021 == 1
+    local _mean = r(mean)
+    putexcel `col'`row' = (`_mean' * 100), nformat("0.0")
+}
+local row = `row' + 1
+
+* c) Domestic only (among those receiving)
+putexcel B`row' = "  Domestic only"
+foreach g in 1 0 {
+    local col = cond(`g'==1, "C", "D")
+    gen byte _dom_remit = (hh_remit_from_abroad_2021 == 0) if hh_received_remittances_2021 == 1
+    sum _dom_remit [aw=hhweight_2021] if ent_2021 == `g' & hh_received_remittances_2021 == 1
+    local _mean = r(mean)
+    putexcel `col'`row' = (`_mean' * 100), nformat("0.0")
+    drop _dom_remit
+}
+local row = `row' + 1
+
+* d) Mean annual remittance amount (among those receiving)
+putexcel B`row' = "Mean annual amount (FCFA)"
+foreach g in 1 0 {
+    local col = cond(`g'==1, "C", "D")
+    sum hh_remit_total_annual_2021 [aw=hhweight_2021] if ent_2021 == `g' & hh_received_remittances_2021 == 1
+    local _mean = r(mean)
+    putexcel `col'`row' = `_mean', nformat("#,##0")
+}
+local row = `row' + 1
+
+* e) Median annual remittance amount (among those receiving)
+putexcel B`row' = "Median annual amount (FCFA)"
+foreach g in 1 0 {
+    local col = cond(`g'==1, "C", "D")
+    _pctile hh_remit_total_annual_2021 [aw=hhweight_2021] if ent_2021 == `g' & hh_received_remittances_2021 == 1, p(50)
+    local _r1 = r(r1)
+    putexcel `col'`row' = `_r1', nformat("#,##0")
+}
+local row = `row' + 2
+
+* Sample sizes
+putexcel B`row' = "N (households)"
+sum ent_2021 [aw=hhweight_2021] if ent_2021 == 1
+local _N = r(N)
+putexcel C`row' = `_N', nformat("#,##0")
+sum ent_2021 [aw=hhweight_2021] if ent_2021 == 0
+local _N = r(N)
+putexcel D`row' = `_N', nformat("#,##0")
+
+
+********************************************************************************
+* DONE
+********************************************************************************
+
+di as text _n "=============================================="
+di as result "ANALYSIS COMPLETE"
+di as text "=============================================="
+di as text ""
+di as text "Output file: ${xlout}"
+di as text ""
+di as text "Excel tabs created:"
+di as text "  1. S1_Introduction        - HH enterprise rates, enterprise size"
+di as text "  2. S1_EntByLocation       - HH enterprise ownership by location (chart data)"
+di as text "  3. S1_NonfarmComposition  - Non-farm employment composition (chart data)"
+di as text "  4. S2_Profile             - Formality, sectors, gender, employees"
+di as text "  5. S2_SectorComposition   - Sector composition of HH enterprises (chart data)"
+di as text "  6. S2_EmployerEnterprises - Employer enterprises by urban/rural (chart data)"
+di as text "  7. S2_HE_Welfare          - HE ownership across welfare quintiles (chart data)"
+di as text "  8. S2_Profile_Chart       - HE vs Wage worker profiles (chart data)"
+di as text "  9. S3_Performance         - Profits, profit growth, internet/electricity"
+di as text "  10. S3_Reg_Profit         - Profit regression results"
+di as text "  11. S3_Reg_Capital        - Capital regression results"
+di as text "  12. S3_Reg_NumEmp         - Employee regression results"
+di as text "  13. S3_Reg_Coop           - All 3 regressions with cooperative dummy"
+di as text "  14. Annex_DescStats       - Descriptive statistics for variables"
+di as text "  15. S4_Endowments         - Endowment levels, VA per worker"
+di as text "  16. S4_Histogram_Data     - Histogram summary statistics (chart data)"
+di as text "  17. S4_GrowthPotential    - Growth indicators"
+di as text "  18. S4_EntryExit          - Entry/exit, stepping stone, TFP"
+di as text "  19. S4_Transitions        - Transition trajectories"
+di as text "  20. TFP_Estimates         - Production function estimates"
+di as text "  21. S1_YouthAdults        - Youth vs adult HH enterprise employment"
+di as text "  22. Sector_by_Location    - Enterprise sector distribution by Cotonou/Porto-Novo/Urban/Rural (2021)"
+di as text "  23. Credit_by_Enterprise  - Credit sources: entrepreneurs vs non-entrepreneurs (2021)"
+di as text "  24. Remittances_by_Enterprise - Remittances: entrepreneurs vs non-entrepreneurs (2021)"
+di as text ""
+di as text "Graphs saved to ${output}/"
+di as text "  hh_ent_by_location.png"
+di as text "  sector_composition.png"
+di as text "  employer_enterprises.png"
+di as text "  he_ownership_welfare.png"
+di as text "  nonfarm_composition.png"
+di as text "  profile_he_vs_wage.png"
+di as text "  youth_vs_adults_hh_enterprise.png"
+di as text "  hist_profit_2018.png, hist_capital_2018.png"
+di as text "  hist_dprofit.png, hist_dcapital.png"
+di as text "  hist_va_2018.png"
+di as text "=============================================="
