@@ -601,3 +601,111 @@ preserve
     tabout worker_type location_2021 [iweight=hhweight_2021] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1(entrepreneur vs. wage by location, 2021)
     tabout worker_type educ_2021    [iweight=hhweight_2021] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1(entrepreneur vs. wage by education, 2021)
 restore
+
+
+********************************************************************************
+* PART 5: SECTION 3 — PERFORMANCE (DESCRIPTIVE)
+********************************************************************************
+
+di as text _n "=============================================="
+di as text "SECTION 3: PERFORMANCE (DESCRIPTIVE)"
+di as text "=============================================="
+
+putexcel set "${xlout}", sheet("S3_Performance") modify
+putexcel B1 = "Section 3: Stylized Facts on Performance"
+
+*--- 3a: Average profits ---
+putexcel B3 = "Profits" C3 = "2018" D3 = "2021"
+
+putexcel B4 = "Average monthly profit (CFA)"
+sum profit_2018 [aw=hhweight_2018] if ent_2018 == 1
+local _mean = r(mean)
+putexcel C4 = `_mean', nformat("#,##0")
+sum profit_2021 [aw=hhweight_2021] if ent_2021 == 1
+local _mean = r(mean)
+putexcel D4 = `_mean', nformat("#,##0")
+
+*--- 3b: Profit categories ---
+putexcel B6 = "Profit Distribution (%)" C6 = "2018" D6 = "2021"
+
+* 2018
+sum hhweight_2018 if ent_2018 == 1 & profit_2018 < 0
+local w_neg = r(sum)
+sum hhweight_2018 if ent_2018 == 1 & profit_2018 == 0
+local w_zero = r(sum)
+sum hhweight_2018 if ent_2018 == 1 & profit_2018 > 0 & profit_2018 < .
+local w_pos = r(sum)
+local w_all = `w_neg' + `w_zero' + `w_pos'
+
+putexcel B7 = "Negative/loss"
+putexcel C7 = (`w_neg'/`w_all'*100), nformat("0.0")
+putexcel B8 = "Zero profits"
+putexcel C8 = (`w_zero'/`w_all'*100), nformat("0.0")
+putexcel B9 = "Positive profits"
+putexcel C9 = (`w_pos'/`w_all'*100), nformat("0.0")
+
+* 2021
+sum hhweight_2021 if ent_2021 == 1 & profit_2021 < 0
+local w_neg = r(sum)
+sum hhweight_2021 if ent_2021 == 1 & profit_2021 == 0
+local w_zero = r(sum)
+sum hhweight_2021 if ent_2021 == 1 & profit_2021 > 0 & profit_2021 < .
+local w_pos = r(sum)
+local w_all = `w_neg' + `w_zero' + `w_pos'
+
+putexcel D7 = (`w_neg'/`w_all'*100), nformat("0.0")
+putexcel D8 = (`w_zero'/`w_all'*100), nformat("0.0")
+putexcel D9 = (`w_pos'/`w_all'*100), nformat("0.0")
+
+*--- 3c: Profit growth (panel enterprises) ---
+putexcel B11 = "Profitability Over Time (Panel Enterprises)"
+putexcel B12 = "Indicator" C12 = "Value"
+
+* Average real profit in 2018 and 2021
+putexcel B13 = "Average real profit 2018 (CFA)"
+sum profit_real_2018 [aw=hhweight_2018] if ent_status==4
+local _mean = r(mean)
+putexcel C13 = `_mean', nformat("#,##0")
+
+putexcel B14 = "Average real profit 2021 (CFA, 2018 prices)"
+sum profit_real_2021 [aw=hhweight_2018] if ent_status==4
+local _mean = r(mean)
+putexcel C14 = `_mean', nformat("#,##0")
+
+* Average annual growth rate of profits
+* Annual growth = ((profit_2021_real / profit_2018)^(1/3) - 1) for 3-year gap
+gen annual_growth_profit = .
+replace annual_growth_profit = ((profit_real_2021 / profit_real_2018)^(1/3) - 1) ///
+    if profit_real_2018 > 0 & profit_real_2021 > 0 & ///
+    ent_2018 == 1 & ent_2021 == 1 & ind_matched == 1
+
+putexcel B15 = "Average annual growth rate of profits"
+sum annual_growth_profit [aw=hhweight_2018]
+local _mean = r(mean)
+putexcel C15 = `_mean', nformat("0.000")
+
+* Share with annual growth > 10%
+gen byte growth_gt10 = (annual_growth_profit > 0.10) if !missing(annual_growth_profit)
+putexcel B16 = "Share with annual profit growth > 10% (%)"
+sum growth_gt10 [aw=hhweight_2018]
+local _mean = r(mean)
+putexcel C16 = (`_mean' * 100), nformat("0.0")
+
+*--- 3d: Internet and electricity access ---
+putexcel B18 = "Internet and Electricity Access" C18 = "2018 (%)" D18 = "2021 (%)"
+
+putexcel B19 = "Share with internet access"
+sum has_internet_2018 [aw=hhweight_2018] if ent_2018 == 1
+local _mean = r(mean)
+putexcel C19 = (`_mean' * 100), nformat("0.0")
+sum has_internet_2021 [aw=hhweight_2021] if ent_2021 == 1
+local _mean = r(mean)
+putexcel D19 = (`_mean' * 100), nformat("0.0")
+
+putexcel B20 = "Share with electricity"
+sum has_electricity_2018 [aw=hhweight_2018] if ent_2018 == 1
+local _mean = r(mean)
+putexcel C20 = (`_mean' * 100), nformat("0.0")
+sum has_electricity_2021 [aw=hhweight_2021] if ent_2021 == 1
+local _mean = r(mean)
+putexcel D20 = (`_mean' * 100), nformat("0.0")
