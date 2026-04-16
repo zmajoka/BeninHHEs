@@ -490,3 +490,114 @@ tabout activity_type_2021 total if sector_work_2021!=1 & working_age_2021==1 [iw
 * Activity type excluding no activity
 tabout emp_type_2018 total if sector_work_2018!=1 & working_age_2018==1 [iweight=indweight2018] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1("Non-ag Activity Type 15-64, excluding no activity, 2018")
 tabout emp_type_2021 total if sector_work_2021!=1 & working_age_2021==1 [iweight=indweight2021] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1("Non-ag Activity Type 15-64 excluding no activity, 2021")
+
+
+********************************************************************************
+* PART 4: SECTION 2 — STYLIZED FACTS ON THE PROFILE
+********************************************************************************
+
+di as text _n "=============================================="
+di as text "SECTION 2: PROFILE"
+di as text "=============================================="
+
+*--- 2a: Formality shares ---
+
+tabout firm_keeps_accounts_2018 total if ent_2018==1 [iweight=hhweight_2018] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1("% keeping written accounts, 2018")
+tabout firm_keeps_accounts_2021 total if ent_2021==1 [iweight=hhweight_2021] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1("% keeping written accounts, 2021")
+
+* NOTE: BEN fiscal ID is NIF (not NINEA as in SEN)
+tabout firm_has_fisc_id_2018 total if ent_2018==1 [iweight=hhweight_2018] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1("% with fiscal ID NIF, 2018")
+tabout firm_has_fisc_id_2021 total if ent_2021==1 [iweight=hhweight_2021] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1("% with fiscal ID NIF, 2021")
+
+tabout firm_in_trade_register_2018 total if ent_2018==1 [iweight=hhweight_2018] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1(% registered in trade register, 2018)
+tabout firm_in_trade_register_2021 total if ent_2021==1 [iweight=hhweight_2021] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1(% registered in trade register, 2021)
+
+tabout formal_all3_2018 total if ent_2018==1 [iweight=hhweight_2018] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1(% meeting all 3 definitions, 2018)
+tabout formal_all3_2021 total if ent_2021==1 [iweight=hhweight_2021] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1(% meeting all 3 definitions, 2021)
+
+*--- 2b: Non-family employees change ---
+putexcel set "${xlout}", sheet("S2_Profile") modify
+putexcel B1 = "Section 2: Stylized Facts on the Profile"
+
+putexcel B3 = "Non-Family Employee Changes (Panel Enterprises)"
+putexcel B4 = "Indicator" C4 = "Value"
+
+* Average non-family employees in 2018 (panel enterprises)
+sum num_emp_2018 [aw=hhweight_2018] if ent_status==4
+local _mean = r(mean)
+putexcel B5 = "Avg non-family employees in 2018"
+putexcel C5 = `_mean', nformat("0.00")
+
+* Average non-family employees in 2021 (panel enterprises)
+sum num_emp_2021 [aw=hhweight_2021] if ent_status==4
+local _mean = r(mean)
+putexcel B6 = "Avg non-family employees in 2021"
+putexcel C6 = `_mean', nformat("0.00")
+
+* Number and share that increased
+count if change_num_emp > 0 & change_num_emp < . & ent_status==4
+local n_increased = r(N)
+putexcel B7 = "N enterprises that increased non-family employees"
+putexcel C7 = `n_increased'
+
+sum change_num_emp [aw=hhweight_2018] if ent_status==4
+local n_total = r(N)
+
+gen byte emp_increased = (change_num_emp > 0) if ent_status==4 & !missing(change_num_emp)
+sum emp_increased [aw=hhweight_2018] if ent_status==4
+local _mean = r(mean) * 100
+putexcel B8 = "Share that increased non-family employees (%)"
+putexcel C8 = `_mean', nformat("0.0")
+
+*--- 2c: Sector of operation ---
+tabout sector_2018 total if ent_2018==1 [iweight=hhweight_2018] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1(Sector of HHE, 2018)
+tabout sector_2021 total if ent_2021==1 [iweight=hhweight_2021] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1(Sector of HHE, 2021)
+
+*--- 2d: Gender of entrepreneurs ---
+tabout sexe_2018 total if ent_2018==1 [iweight=hhweight_2018] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1(Gender of entrepreneur, 2018)
+tabout sexe_2021 total if ent_2021==1 [iweight=hhweight_2021] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1(Gender of entrepreneur, 2021)
+
+*--- 2e: Sector distribution by gender ---
+tabout sexe_2018 sector_2018 if ent_2018==1 [iweight=hhweight_2018] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1(Gender/Sector of entrepreneur, 2018)
+tabout sexe_2021 sector_2021 if ent_2021==1 [iweight=hhweight_2021] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1(Gender/Sector of entrepreneur, 2021)
+
+*--- 2f: HH enterprise ownership across welfare quintiles ---
+preserve
+    bysort hhid: keep if _n == 1
+    tabout hh_has_enterprise_2018 welfare_quintile_2018 [iweight=hhweight_2018] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1(HH enterprise by quintile, 2018)
+    tabout hh_has_enterprise_2021 welfare_quintile_2021 [iweight=hhweight_2021] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1(HH Enterprise by quintile, 2021)
+restore
+
+*--- 2g: Profiles of HE vs Wage Workers ---
+
+* 2018
+preserve
+    keep if in_2018 == 1 & age_2018 >= 15 & age_2018 < .
+    gen byte worker_type = .
+    replace worker_type = 1 if ent_2018 == 1           // HE
+    replace worker_type = 2 if activity_type_2018 == 2 // Wage
+    keep if inlist(worker_type, 1, 2)
+    label define wtype 1 "HE" 2 "Wage"
+    label values worker_type wtype
+
+    tabout worker_type sexe_2018    [iweight=hhweight_2018] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1(entrepreneur vs. wage by gender, 2018)
+    tabout worker_type rural_2018   [iweight=hhweight_2018] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1(entrepreneur vs. wage by urban/rural, 2018)
+    tabout worker_type location_2018 [iweight=hhweight_2018] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1(entrepreneur vs. wage by location, 2018)
+    tabout worker_type educ_2018    [iweight=hhweight_2018] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1(entrepreneur vs. wage by education, 2018)
+restore
+
+* 2021
+preserve
+    keep if in_2021 == 1 & age_2021 >= 15 & age_2021 < .
+    gen byte worker_type = .
+    replace worker_type = 1 if ent_2021 == 1           // HE
+    replace worker_type = 2 if activity_type_2021 == 2 // Wage
+    keep if inlist(worker_type, 1, 2)
+    label define wtype 1 "HE" 2 "Wage"
+    label values worker_type wtype
+
+    tabout worker_type sexe_2021    [iweight=hhweight_2021] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1(entrepreneur vs. wage by gender, 2021)
+    tabout worker_type rural_2021   [iweight=hhweight_2021] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1(entrepreneur vs. wage by urban/rural, 2021)
+    tabout worker_type location_2021 [iweight=hhweight_2021] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1(entrepreneur vs. wage by location, 2021)
+    tabout worker_type educ_2021    [iweight=hhweight_2021] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1(entrepreneur vs. wage by education, 2021)
+restore
