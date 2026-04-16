@@ -799,3 +799,51 @@ putexcel B2 = "OLS with clustering at EA level"
 regress num_emp_2021 num_emp_2018 lnprofit_2018 lnvalue_total_2018 i.sexe_2018 i.age_cat_2018 i.milieu_2018 i.zae_2018 i.ethnie_2018 i.alfab_2018 i.educ_2018 i.internet_2018 i.has_electricity_2018 i.pcexpQ_2018 i.firm_age_2018 i.emphh_cat_2018 ib5.sector_2018 i.place_2018 i.financing_2018 ib2.s10q45a_2018 ib2.s10q45b_2018 ib2.s10q45c_2018 ib2.s10q45d_2018 ib2.s10q45e_2018 ib2.s10q45f_2018 ib2.s10q45g_2018 ib2.s10q45h_2018 ib2.s10q45i_2018 ib2.s10q45j_2018 ib2.s10q45k_2018 ib2.s10q45l_2018 ib2.s10q45m_2018 ib2.s10q45n_2018 ib2.s10q45o_2018 i.firm_keeps_accounts_2018 i.firm_has_fisc_id_2018 i.firm_in_trade_register_2018 [aw=hhweight_2018], robust baselevels cluster(grappe)
 
 export_reg_results "S3_Reg_NumEmp" 4
+
+
+********************************************************************************
+* PART 7: SECTION 3 — REGRESSIONS WITH COOPERATIVE
+********************************************************************************
+
+di as text _n "=============================================="
+di as text "SECTION 3: REGRESSIONS WITH COOPERATIVE"
+di as text "=============================================="
+
+putexcel set "${xlout}", sheet("S3_Reg_Coop") modify
+putexcel B1 = "Regressions with Cooperative Dummy"
+putexcel B2 = "All three regressions with cooperative (legal form) as additional control"
+
+*--- Profit with cooperative ---
+putexcel B4 = "=== (i) Log Profit 2021 ==="
+
+regress lnprofit_2021 lnprofit_2018 lnvalue_total_2018 i.sexe_2018 i.age_cat_2018 i.milieu_2018 i.zae_2018 i.ethnie_2018 i.alfab_2018 i.educ_2018 i.internet_2018 i.has_electricity_2018 i.pcexpQ_2018 i.firm_age_2018 i.emp_cat_2018 i.emphh_cat_2018 ib5.sector_2018 i.place_2018 i.financing_2018 ib2.s10q45a_2018 ib2.s10q45b_2018 ib2.s10q45c_2018 ib2.s10q45d_2018 ib2.s10q45e_2018 ib2.s10q45f_2018 ib2.s10q45g_2018 ib2.s10q45h_2018 ib2.s10q45i_2018 ib2.s10q45j_2018 ib2.s10q45k_2018 ib2.s10q45l_2018 ib2.s10q45m_2018 ib2.s10q45n_2018 ib2.s10q45o_2018 i.firm_keeps_accounts_2018 i.firm_has_fisc_id_2018 i.firm_in_trade_register_2018 i.cooperative_2018 [aw=hhweight_2018], robust baselevels cluster(grappe)
+
+export_reg_results "S3_Reg_Coop" 5
+
+* Record where profit regression ends (for capital regression placement)
+matrix results = r(table)'
+local profit_nrows = rowsof(results)
+local capital_start = `profit_nrows' + 5 + 5  // 5 (start) + nrows + gap
+
+*--- Capital with cooperative ---
+local cs = `capital_start'
+putexcel B`cs' = "=== (ii) Log Capital Value 2021 ==="
+local cs1 = `cs' + 1
+
+regress lnvalue_total_2021 lnvalue_total_2018 lnprofit_2018 i.sexe_2018 i.age_cat_2018 i.milieu_2018 i.zae_2018 i.ethnie_2018 i.alfab_2018 i.educ_2018 i.internet_2018 i.has_electricity_2018 i.pcexpQ_2018 i.firm_age_2018 i.emp_cat_2018 i.emphh_cat_2018 ib5.sector_2018 i.place_2018 i.financing_2018 ib2.s10q45a_2018 ib2.s10q45b_2018 ib2.s10q45c_2018 ib2.s10q45d_2018 ib2.s10q45e_2018 ib2.s10q45f_2018 ib2.s10q45g_2018 ib2.s10q45h_2018 ib2.s10q45i_2018 ib2.s10q45j_2018 ib2.s10q45k_2018 ib2.s10q45l_2018 ib2.s10q45m_2018 ib2.s10q45n_2018 ib2.s10q45o_2018 i.firm_keeps_accounts_2018 i.firm_has_fisc_id_2018 i.firm_in_trade_register_2018 i.cooperative_2018 [aw=hhweight_2018], robust baselevels cluster(grappe)
+
+export_reg_results "S3_Reg_Coop" `cs1'
+
+* Record where capital ends for num_emp placement
+matrix results = r(table)'
+local cap_nrows = rowsof(results)
+local nemp_start = `cs1' + `cap_nrows' + 4
+
+*--- Num emp with cooperative ---
+local ns = `nemp_start'
+putexcel B`ns' = "=== (iii) Non-Family Employees 2021 ==="
+local ns1 = `ns' + 1
+
+regress num_emp_2021 num_emp_2018 lnprofit_2018 lnvalue_total_2018 i.sexe_2018 i.age_cat_2018 i.milieu_2018 i.zae_2018 i.ethnie_2018 i.alfab_2018 i.educ_2018 i.internet_2018 i.has_electricity_2018 i.pcexpQ_2018 i.firm_age_2018 i.emphh_cat_2018 ib5.sector_2018 i.place_2018 i.financing_2018 ib2.s10q45a_2018 ib2.s10q45b_2018 ib2.s10q45c_2018 ib2.s10q45d_2018 ib2.s10q45e_2018 ib2.s10q45f_2018 ib2.s10q45g_2018 ib2.s10q45h_2018 ib2.s10q45i_2018 ib2.s10q45j_2018 ib2.s10q45k_2018 ib2.s10q45l_2018 ib2.s10q45m_2018 ib2.s10q45n_2018 ib2.s10q45o_2018 i.firm_keeps_accounts_2018 i.firm_has_fisc_id_2018 i.firm_in_trade_register_2018 i.cooperative_2018 [aw=hhweight_2018], robust baselevels cluster(grappe)
+
+export_reg_results "S3_Reg_Coop" `ns1'
