@@ -709,3 +709,93 @@ putexcel C20 = (`_mean' * 100), nformat("0.0")
 sum has_electricity_2021 [aw=hhweight_2021] if ent_2021 == 1
 local _mean = r(mean)
 putexcel D20 = (`_mean' * 100), nformat("0.0")
+
+
+********************************************************************************
+* PART 6: SECTION 3 — REGRESSIONS (without cooperative)
+********************************************************************************
+
+di as text _n "=============================================="
+di as text "SECTION 3: REGRESSIONS"
+di as text "=============================================="
+
+* Restrict sample for regressions (matching regressions.do)
+* Keep entrepreneurs, adults 15+
+* The regressions use panel enterprises but regressions.do doesn't explicitly
+* restrict to panel — it uses all observations with non-missing variables.
+* Following the do-file: no explicit panel restriction.
+
+*--- Helper program to export regression results ---
+capture program drop export_reg_results
+program define export_reg_results
+    args sheet startrow
+
+    * Store e() results and r(table) before putexcel set clears r()
+    local _eN = e(N)
+    local _er2 = e(r2)
+    matrix results = r(table)'
+
+    putexcel set "${xlout}", sheet("`sheet'") modify
+
+    local r1 = `startrow'
+    putexcel B`r1' = "Variable" C`r1' = "Coefficient" D`r1' = "Std Error" ///
+        E`r1' = "P-value" F`r1' = "Sig"
+    local nrows = rowsof(results)
+
+    matrix coef = results[1..., 1]
+    matrix se   = results[1..., 2]
+
+    local r2 = `r1' + 1
+    putexcel B`r2' = matrix(coef), rownames nformat("0.0000")
+    putexcel D`r2' = matrix(se), nformat("0.0000")
+
+    * Add p-values and significance stars
+    forvalues i = 1/`nrows' {
+        local pv = results[`i', 4]
+        local row = `i' + `startrow'
+        putexcel E`row' = `pv', nformat("0.000")
+        local stars = ""
+        if `pv' < 0.01      local stars = "***"
+        else if `pv' < 0.05 local stars = "**"
+        else if `pv' < 0.1  local stars = "*"
+        putexcel F`row' = "`stars'"
+    }
+
+    * N and R-squared
+    local lastrow = `nrows' + `startrow' + 2
+    putexcel B`lastrow' = "N"
+    putexcel C`lastrow' = `_eN'
+    local lastrow2 = `lastrow' + 1
+    putexcel B`lastrow2' = "R-squared"
+    putexcel C`lastrow2' = `_er2', nformat("0.000")
+end
+
+* NOTE: All independent variables are from 2018.
+* Sector 5 (Retail) is the base category (ib5.sector_2018).
+
+*--- 6a: Profit regression ---
+putexcel set "${xlout}", sheet("S3_Reg_Profit") modify
+putexcel B1 = "Regression: Log Profit 2021"
+putexcel B2 = "OLS with clustering at EA level"
+
+regress lnprofit_2021 lnprofit_2018 lnvalue_total_2018 i.sexe_2018 i.age_cat_2018 i.milieu_2018 i.zae_2018 i.ethnie_2018 i.alfab_2018 i.educ_2018 i.internet_2018 i.has_electricity_2018 i.pcexpQ_2018 i.firm_age_2018 i.emp_cat_2018 i.emphh_cat_2018 ib5.sector_2018 i.place_2018 i.financing_2018 ib2.s10q45a_2018 ib2.s10q45b_2018 ib2.s10q45c_2018 ib2.s10q45d_2018 ib2.s10q45e_2018 ib2.s10q45f_2018 ib2.s10q45g_2018 ib2.s10q45h_2018 ib2.s10q45i_2018 ib2.s10q45j_2018 ib2.s10q45k_2018 ib2.s10q45l_2018 ib2.s10q45m_2018 ib2.s10q45n_2018 ib2.s10q45o_2018 i.firm_keeps_accounts_2018 i.firm_has_fisc_id_2018 i.firm_in_trade_register_2018 [aw=hhweight_2018], robust baselevels cluster(grappe)
+
+export_reg_results "S3_Reg_Profit" 4
+
+*--- 6b: Capital regression ---
+putexcel set "${xlout}", sheet("S3_Reg_Capital") modify
+putexcel B1 = "Regression: Log Capital Value 2021"
+putexcel B2 = "OLS with clustering at EA level"
+
+regress lnvalue_total_2021 lnvalue_total_2018 lnprofit_2018 i.sexe_2018 i.age_cat_2018 i.milieu_2018 i.zae_2018 i.ethnie_2018 i.alfab_2018 i.educ_2018 i.internet_2018 i.has_electricity_2018 i.pcexpQ_2018 i.firm_age_2018 i.emp_cat_2018 i.emphh_cat_2018 ib5.sector_2018 i.place_2018 i.financing_2018 ib2.s10q45a_2018 ib2.s10q45b_2018 ib2.s10q45c_2018 ib2.s10q45d_2018 ib2.s10q45e_2018 ib2.s10q45f_2018 ib2.s10q45g_2018 ib2.s10q45h_2018 ib2.s10q45i_2018 ib2.s10q45j_2018 ib2.s10q45k_2018 ib2.s10q45l_2018 ib2.s10q45m_2018 ib2.s10q45n_2018 ib2.s10q45o_2018 i.firm_keeps_accounts_2018 i.firm_has_fisc_id_2018 i.firm_in_trade_register_2018 [aw=hhweight_2018], robust baselevels cluster(grappe)
+
+export_reg_results "S3_Reg_Capital" 4
+
+*--- 6c: Number of employees regression ---
+putexcel set "${xlout}", sheet("S3_Reg_NumEmp") modify
+putexcel B1 = "Regression: Non-Family Employees 2021"
+putexcel B2 = "OLS with clustering at EA level"
+
+regress num_emp_2021 num_emp_2018 lnprofit_2018 lnvalue_total_2018 i.sexe_2018 i.age_cat_2018 i.milieu_2018 i.zae_2018 i.ethnie_2018 i.alfab_2018 i.educ_2018 i.internet_2018 i.has_electricity_2018 i.pcexpQ_2018 i.firm_age_2018 i.emphh_cat_2018 ib5.sector_2018 i.place_2018 i.financing_2018 ib2.s10q45a_2018 ib2.s10q45b_2018 ib2.s10q45c_2018 ib2.s10q45d_2018 ib2.s10q45e_2018 ib2.s10q45f_2018 ib2.s10q45g_2018 ib2.s10q45h_2018 ib2.s10q45i_2018 ib2.s10q45j_2018 ib2.s10q45k_2018 ib2.s10q45l_2018 ib2.s10q45m_2018 ib2.s10q45n_2018 ib2.s10q45o_2018 i.firm_keeps_accounts_2018 i.firm_has_fisc_id_2018 i.firm_in_trade_register_2018 [aw=hhweight_2018], robust baselevels cluster(grappe)
+
+export_reg_results "S3_Reg_NumEmp" 4
