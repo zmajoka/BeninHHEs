@@ -847,3 +847,193 @@ local ns1 = `ns' + 1
 regress num_emp_2021 num_emp_2018 lnprofit_2018 lnvalue_total_2018 i.sexe_2018 i.age_cat_2018 i.milieu_2018 i.zae_2018 i.ethnie_2018 i.alfab_2018 i.educ_2018 i.internet_2018 i.has_electricity_2018 i.pcexpQ_2018 i.firm_age_2018 i.emphh_cat_2018 ib5.sector_2018 i.place_2018 i.financing_2018 ib2.s10q45a_2018 ib2.s10q45b_2018 ib2.s10q45c_2018 ib2.s10q45d_2018 ib2.s10q45e_2018 ib2.s10q45f_2018 ib2.s10q45g_2018 ib2.s10q45h_2018 ib2.s10q45i_2018 ib2.s10q45j_2018 ib2.s10q45k_2018 ib2.s10q45l_2018 ib2.s10q45m_2018 ib2.s10q45n_2018 ib2.s10q45o_2018 i.firm_keeps_accounts_2018 i.firm_has_fisc_id_2018 i.firm_in_trade_register_2018 i.cooperative_2018 [aw=hhweight_2018], robust baselevels cluster(grappe)
 
 export_reg_results "S3_Reg_Coop" `ns1'
+
+
+********************************************************************************
+* PART 8: ANNEX — DESCRIPTIVE STATISTICS
+********************************************************************************
+
+di as text _n "=============================================="
+di as text "ANNEX: DESCRIPTIVE STATISTICS"
+di as text "=============================================="
+
+putexcel set "${xlout}", sheet("Annex_DescStats") modify
+putexcel B1 = "Annex: Descriptive Statistics for Regression Variables"
+
+* --- Continuous variables ---
+putexcel B3 = "Variable" C3 = "P10" D3 = "P50" E3 = "P90" ///
+    F3 = "Mean" G3 = "SD" H3 = "N"
+
+local row = 4
+local desc_vars "lnprofit_2021 lnprofit_2018 lnvalue_total_2021 lnvalue_total_2018 num_emp_2021 num_emp_2018"
+
+foreach v of local desc_vars {
+    sum `v' [aw=hhweight_2018], detail
+    putexcel B`row' = "`v'"
+    local _N = r(N)
+    local _mean = r(mean)
+    local _p10 = r(p10)
+    local _p50 = r(p50)
+    local _p90 = r(p90)
+    local _sd = r(sd)
+    putexcel C`row' = `_p10', nformat("0.0")
+    putexcel D`row' = `_p50', nformat("0.0")
+    putexcel E`row' = `_p90', nformat("0.0")
+    putexcel F`row' = `_mean', nformat("0.00")
+    putexcel G`row' = `_sd', nformat("0.00")
+    putexcel H`row' = `_N', nformat("#,##0")
+    local row = `row' + 1
+}
+
+* --- Binary/categorical variables ---
+local row = `row' + 1
+putexcel B`row' = "Categorical Variables (% or mean)"
+local row = `row' + 1
+putexcel B`row' = "Variable" C`row' = "Mean" D`row' = "N"
+local row = `row' + 1
+
+* Gender (share female)
+putexcel B`row' = "Female (sexe_2018==2)"
+gen byte _female = (sexe_2018 == 2)
+sum _female [aw=hhweight_2018] if ent_2018 == 1
+local _N = r(N)
+local _mean = r(mean)
+putexcel C`row' = `_mean', nformat("0.000")
+putexcel D`row' = `_N'
+drop _female
+local row = `row' + 1
+
+* Urban/rural
+putexcel B`row' = "Rural (milieu_2018==2)"
+gen byte _rural = (milieu_2018 == 2) if !missing(milieu_2018)
+sum _rural [aw=hhweight_2018] if ent_2018 == 1
+local _N = r(N)
+local _mean = r(mean)
+putexcel C`row' = `_mean', nformat("0.000")
+putexcel D`row' = `_N'
+drop _rural
+local row = `row' + 1
+
+* Internet
+putexcel B`row' = "Has internet"
+sum internet_2018 [aw=hhweight_2018] if ent_2018 == 1
+local _N = r(N)
+local _mean = r(mean)
+putexcel C`row' = `_mean', nformat("0.000")
+putexcel D`row' = `_N'
+local row = `row' + 1
+
+* Electricity (enterprise-level)
+putexcel B`row' = "Has electricity (enterprise)"
+sum has_electricity_2018 [aw=hhweight_2018] if ent_2018 == 1
+local _N = r(N)
+local _mean = r(mean)
+putexcel C`row' = `_mean', nformat("0.000")
+putexcel D`row' = `_N'
+local row = `row' + 1
+
+* Formality indicators
+foreach v in firm_keeps_accounts_2018 firm_has_fisc_id_2018 firm_in_trade_register_2018 {
+    putexcel B`row' = "`v'"
+    sum `v' [aw=hhweight_2018] if ent_2018 == 1
+    local _N = r(N)
+    local _mean = r(mean)
+    putexcel C`row' = `_mean', nformat("0.000")
+    putexcel D`row' = `_N'
+    local row = `row' + 1
+}
+
+* --- Self-reported enterprise problems (s10q45a-o) ---
+local row = `row' + 1
+putexcel B`row' = "Self-Reported Enterprise Problems (share reporting problem)"
+local row = `row' + 1
+putexcel B`row' = "Variable" C`row' = "Mean (2018)" D`row' = "N (2018)" ///
+    E`row' = "Mean (2021)" F`row' = "N (2021)"
+local row = `row' + 1
+
+local prob_a "Supply of raw materials"
+local prob_b "Lack of customers"
+local prob_c "Too much competition"
+local prob_d "Accessing credit"
+local prob_e "Recruiting personnel"
+local prob_f "Insufficient space"
+local prob_g "Accessing equipment"
+local prob_h "Technical manufacturing"
+local prob_i "Technical management"
+local prob_j "Electricity access"
+local prob_k "Power outages"
+local prob_l "Other infrastructure"
+local prob_m "Internet"
+local prob_n "Insecurity"
+local prob_o "Regulation and taxes"
+
+foreach letter in a b c d e f g h i j k l m n o {
+    putexcel B`row' = "Problem: `prob_`letter''"
+
+    * 2018
+    capture gen byte _prob_`letter'_18 = (s10q45`letter'_2018 == 1) if ent_2018 == 1
+    sum _prob_`letter'_18 [aw=hhweight_2018] if ent_2018 == 1
+    local _N18 = r(N)
+    local _mean18 = r(mean)
+    putexcel C`row' = `_mean18', nformat("0.000")
+    putexcel D`row' = `_N18'
+    capture drop _prob_`letter'_18
+
+    * 2021
+    capture gen byte _prob_`letter'_21 = (s10q45`letter'_2021 == 1) if ent_2021 == 1
+    sum _prob_`letter'_21 [aw=hhweight_2021] if ent_2021 == 1
+    local _N21 = r(N)
+    local _mean21 = r(mean)
+    putexcel E`row' = `_mean21', nformat("0.000")
+    putexcel F`row' = `_N21'
+    capture drop _prob_`letter'_21
+
+    local row = `row' + 1
+}
+
+* Age categories
+putexcel B`row' = "Age category distribution"
+local row = `row' + 1
+forvalues c = 1/4 {
+    local lbl : label (age_cat_2018) `c'
+    putexcel B`row' = "Age: `lbl'"
+    gen byte _ac = (age_cat_2018 == `c') if !missing(age_cat_2018)
+    sum _ac [aw=hhweight_2018] if ent_2018 == 1
+    local _N = r(N)
+    local _mean = r(mean)
+    putexcel C`row' = `_mean', nformat("0.000")
+    putexcel D`row' = `_N'
+    drop _ac
+    local row = `row' + 1
+}
+
+* Education categories
+putexcel B`row' = "Education distribution"
+local row = `row' + 1
+forvalues c = 1/3 {
+    local lbl : label (educ_2018) `c'
+    putexcel B`row' = "Educ: `lbl'"
+    gen byte _ed = (educ_2018 == `c') if !missing(educ_2018)
+    sum _ed [aw=hhweight_2018] if ent_2018 == 1
+    local _N = r(N)
+    local _mean = r(mean)
+    putexcel C`row' = `_mean', nformat("0.000")
+    putexcel D`row' = `_N'
+    drop _ed
+    local row = `row' + 1
+}
+
+* Consumption quintiles
+putexcel B`row' = "Consumption quintile distribution"
+local row = `row' + 1
+forvalues c = 1/5 {
+    putexcel B`row' = "Quintile `c'"
+    gen byte _pq = (pcexpQ_2018 == `c') if !missing(pcexpQ_2018)
+    sum _pq [aw=hhweight_2018] if ent_2018 == 1
+    local _N = r(N)
+    local _mean = r(mean)
+    putexcel C`row' = `_mean', nformat("0.000")
+    putexcel D`row' = `_N'
+    drop _pq
+    local row = `row' + 1
+}
