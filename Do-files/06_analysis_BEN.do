@@ -216,3 +216,115 @@ foreach yr in 2018 2021 {
         if ent_`yr' == 1
     label variable formal_all3_`yr' "Formal by all 3 definitions (`yr')"
 }
+
+
+********************************************************************************
+* PART 2: TFP ESTIMATION (preserve/restore)
+********************************************************************************
+
+di as text _n "=============================================="
+di as text "ESTIMATING TFP"
+di as text "=============================================="
+
+preserve
+
+* Keep only panel enterprises (in both waves)
+keep if ent_2018 == 1 & ent_2021 == 1 & ind_matched == 1
+
+* Create enterprise identifier
+gen str ent_id = string(grappe) + "_" + string(menage) + "_" + string(numind)
+
+* Keep needed variables
+keep ent_id grappe menage numind hhweight_2018 ///
+    revenue_2018 revenue_2021 value_total_2018 value_total_2021 ///
+    expenses_2018 expenses_2021 val_hired_labor_2018 val_hired_labor_2021
+
+* Expand to long format (2 obs per enterprise)
+expand 2, gen(_copy)
+bysort ent_id (_copy): gen year = _n - 1
+
+* Create production function variables
+gen val_output = .
+replace val_output = revenue_2018     if year == 0
+replace val_output = revenue_2021     if year == 1
+
+gen val_capital = .
+replace val_capital = value_total_2018 if year == 0
+replace val_capital = value_total_2021 if year == 1
+
+gen val_inter_good = .
+replace val_inter_good = expenses_2018 if year == 0
+replace val_inter_good = expenses_2021 if year == 1
+
+gen val_hired_labor = .
+replace val_hired_labor = val_hired_labor_2018 if year == 0
+replace val_hired_labor = val_hired_labor_2021 if year == 1
+
+* Log transformations (using log(1+x) as in TFP do-file)
+foreach var in val_output val_capital val_inter_good val_hired_labor {
+    gen log_`var' = log(1 + `var')
+}
+
+* Translog terms (squared and interactions)
+gen l_cap_squared        = log_val_capital * log_val_capital
+gen l_intergood_squared  = log_val_inter_good * log_val_inter_good
+gen l_labor_squared      = log_val_hired_labor * log_val_hired_labor
+gen l_cap_l_intergood    = log_val_capital * log_val_inter_good
+gen l_cap_l_labor        = log_val_capital * log_val_hired_labor
+gen l_labor_l_intergood  = log_val_hired_labor * log_val_inter_good
+
+* Panel setup
+encode ent_id, gen(hhid_num)
+sort hhid_num year
+xtset hhid_num year
+
+* Fixed effects regression (translog production function)
+global tfp_regressors log_val_capital log_val_inter_good log_val_hired_labor ///
+    l_cap_squared l_intergood_squared l_labor_squared ///
+    l_cap_l_intergood l_cap_l_labor l_labor_l_intergood
+
+xtreg log_val_output $tfp_regressors [pw=hhweight_2018], fe vce(cluster grappe)
+
+* Export TFP production function estimates
+* Capture r(table) before putexcel set clears r() results
+matrix results = r(table)'
+
+putexcel set "${xlout}", sheet("TFP_Estimates") replace
+putexcel B1 = "TFP Production Function Estimates (Fixed Effects)"
+putexcel B3 = "Variable" C3 = "Coefficient" D3 = "Std Error" E3 = "P-value"
+matrix coef = results[1..., 1]
+matrix se   = results[1..., 2]
+matrix pval = results[1..., 4]
+
+putexcel B4 = matrix(coef), rownames nformat("0.000")
+putexcel D4 = matrix(se), nformat("0.000")
+
+* Add p-values
+local nrows = rowsof(results)
+forvalues i = 1/`nrows' {
+    local pv = results[`i', 4]
+    local row = `i' + 3
+    putexcel E`row' = `pv', nformat("0.000")
+}
+
+* Predict TFP residual
+predict tfp, e
+
+* Save TFP values per enterprise-year
+keep grappe menage numind year tfp
+reshape wide tfp, i(grappe menage numind) j(year)
+rename tfp0 tfp_2018
+rename tfp1 tfp_2021
+
+tempfile tfp_data
+save `tfp_data'
+
+restore
+
+* Merge TFP back into main dataset
+merge m:1 grappe menage numind using `tfp_data', nogenerate
+
+* TFP increased dummy
+gen byte tfp_increased = (tfp_2021 > tfp_2018) ///
+    if !missing(tfp_2018) & !missing(tfp_2021)
+label variable tfp_increased "TFP increased between 2018 and 2021"
