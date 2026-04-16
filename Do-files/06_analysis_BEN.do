@@ -328,3 +328,165 @@ merge m:1 grappe menage numind using `tfp_data', nogenerate
 gen byte tfp_increased = (tfp_2021 > tfp_2018) ///
     if !missing(tfp_2018) & !missing(tfp_2021)
 label variable tfp_increased "TFP increased between 2018 and 2021"
+
+
+********************************************************************************
+* PART 3: SECTION 1 — INTRODUCTION
+********************************************************************************
+
+di as text _n "=============================================="
+di as text "SECTION 1: INTRODUCTION"
+di as text "=============================================="
+
+* % of HHs operating at least one enterprise
+tabout hh_has_enterprise_2018 total [iweight=hhweight_2018] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1("% of HHs with an enterprise, 2018")
+tabout hh_has_enterprise_2021 total [iweight=hhweight_2021] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1("% of HHs with an enterprise, 2021")
+
+putexcel set "${xlout}", sheet("S1_Introduction") modify
+putexcel B1 = "Section 1: Introduction"
+putexcel B2 = "Household Enterprises in Benin, 2018 and 2021"
+
+*--- % of HH operating at least 1 enterprise ---
+putexcel B4 = "Indicator" C4 = "2018" D4 = "2021"
+
+* 2018: total number of enterprises within a household
+bysort hhid: egen num_enterprise_2018 = total(ent_2018) if ent_2018==1
+replace num_enterprise_2018=0 if ent_2018==0
+
+* 2018: average number of enterprises per household, among those with an enterprise
+preserve
+sort hhid num_enterprise_2018 ent_2018
+collapse (first) num_enterprise_2018 ent_2018 hhweight, by(hhid)
+collapse num_enterprise_2018 if ent_2018==1 [pweight=hhweight]
+outsheet using "$output/av_enterprises2018.xls", replace
+restore
+
+* 2018: HH with at least 1 enterprise
+preserve
+keep if in_2018 == 1
+bysort hhid: keep if _n == 1
+sum hh_has_enterprise_2018 [aw=hhweight]
+local pct_hh_ent_2018 = r(mean) * 100
+restore
+
+* 2021: total number of enterprises within a household
+bysort hhid: egen num_enterprise_2021 = total(ent_2021) if ent_2021==1
+replace num_enterprise_2021=0 if ent_2021==0
+
+* 2021: average number of enterprises per household, among those with an enterprise
+preserve
+sort hhid num_enterprise_2021 ent_2021
+collapse (first) num_enterprise_2021 ent_2021 hhweight, by(hhid)
+collapse num_enterprise_2021 if ent_2021==1 [pweight=hhweight]
+outsheet using "$output/av_enterprises2021.xls", replace
+restore
+
+* 2021: HH with at least 1 enterprise
+preserve
+    keep if in_2021 == 1
+    bysort hhid: keep if _n == 1
+    sum hh_has_enterprise_2021 [aw=hhweight_2021]
+    local pct_hh_ent_2021 = r(mean) * 100
+restore
+
+putexcel B5 = "% of HH operating at least 1 enterprise"
+putexcel C5 = `pct_hh_ent_2018', nformat("0.0")
+putexcel D5 = `pct_hh_ent_2021', nformat("0.0")
+
+* Number of enterprises per household — categories 1, 2, 3+
+foreach yr in 2018 2021 {
+    gen byte n_ent_cat_`yr' = .
+    replace n_ent_cat_`yr' = 1 if num_enterprise_`yr' == 1
+    replace n_ent_cat_`yr' = 2 if num_enterprise_`yr' == 2
+    replace n_ent_cat_`yr' = 3 if num_enterprise_`yr' >= 3 & !missing(num_enterprise_`yr')
+    label variable n_ent_cat_`yr' "Enterprise count category (`yr')"
+}
+
+label define n_ent_cat_lbl 1 "1" 2 "2" 3 "3+"
+label values n_ent_cat_2018 n_ent_cat_lbl
+label values n_ent_cat_2021 n_ent_cat_lbl
+
+tabout n_ent_cat_2018 total [iweight=hhweight_2018] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1("Number of enterprises per hh, 2018")
+tabout n_ent_cat_2021 total [iweight=hhweight_2021] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1("Number of enterprises per hh, 2021")
+
+*--- Average enterprise size (employees) ---
+putexcel B7 = "Average Enterprise Size"
+
+* Total employees (family + non-family, excl. proprietor)
+putexcel B8 = "Total employees (family + non-family)"
+sum total_emp_2018 [aw=hhweight_2018] if ent_2018 == 1
+local _mean = r(mean)
+putexcel C8 = `_mean', nformat("0.00")
+sum total_emp_2021 [aw=hhweight_2021] if ent_2021 == 1
+local _mean = r(mean)
+putexcel D8 = `_mean', nformat("0.00")
+
+* Family employees
+putexcel B9 = "Family employees"
+sum num_hhemp_2018 [aw=hhweight_2018] if ent_2018 == 1
+local _mean = r(mean)
+putexcel C9 = `_mean', nformat("0.00")
+sum num_hhemp_2021 [aw=hhweight_2021] if ent_2021 == 1
+local _mean = r(mean)
+putexcel D9 = `_mean', nformat("0.00")
+
+* Non-family employees
+putexcel B10 = "Non-family employees"
+sum num_emp_2018 [aw=hhweight_2018] if ent_2018 == 1
+local _mean = r(mean)
+putexcel C10 = `_mean', nformat("0.00")
+sum num_emp_2021 [aw=hhweight_2021] if ent_2021 == 1
+local _mean = r(mean)
+putexcel D10 = `_mean', nformat("0.00")
+
+* % with 0 non-family employees
+putexcel B11 = "% with 0 non-family employees"
+gen byte _zero_emp_2018 = (num_emp_2018 == 0) if ent_2018 == 1
+sum _zero_emp_2018 [aw=hhweight_2018] if ent_2018 == 1
+putexcel C11 = (r(mean) * 100), nformat("0.0")
+gen byte _zero_emp_2021 = (num_emp_2021 == 0) if ent_2021 == 1
+sum _zero_emp_2021 [aw=hhweight_2021] if ent_2021 == 1
+putexcel D11 = (r(mean) * 100), nformat("0.0")
+
+* % with 1 or more non-family employees
+putexcel B12 = "% with 1+ non-family employees"
+gen byte _oneplus_emp_2018 = (num_emp_2018 >= 1 & !missing(num_emp_2018)) if ent_2018 == 1
+sum _oneplus_emp_2018 [aw=hhweight_2018] if ent_2018 == 1
+putexcel C12 = (r(mean) * 100), nformat("0.0")
+gen byte _oneplus_emp_2021 = (num_emp_2021 >= 1 & !missing(num_emp_2021)) if ent_2021 == 1
+sum _oneplus_emp_2021 [aw=hhweight_2021] if ent_2021 == 1
+putexcel D12 = (r(mean) * 100), nformat("0.0")
+
+* % with 2 or more non-family employees
+putexcel B13 = "% with 2+ non-family employees"
+gen byte _twoplus_emp_2018 = (num_emp_2018 >= 2 & !missing(num_emp_2018)) if ent_2018 == 1
+sum _twoplus_emp_2018 [aw=hhweight_2018] if ent_2018 == 1
+putexcel C13 = (r(mean) * 100), nformat("0.0")
+gen byte _twoplus_emp_2021 = (num_emp_2021 >= 2 & !missing(num_emp_2021)) if ent_2021 == 1
+sum _twoplus_emp_2021 [aw=hhweight_2021] if ent_2021 == 1
+putexcel D13 = (r(mean) * 100), nformat("0.0")
+
+drop _zero_emp_* _oneplus_emp_* _twoplus_emp_*
+
+*--- 1b: HH enterprise ownership by location ---
+* % of households with at least 1 enterprise, Urban vs Rural, 2018 & 2021
+
+preserve
+keep if ent_2018==1
+tabout ent_2018 rural_2018 [iweight=hhweight_2018] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1("Enterprise by location 2018")
+restore
+
+preserve
+keep if ent_2021==1
+tabout ent_2021 rural_2021 [iweight=hhweight_2021] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1("Enterprise location 2021")
+restore
+
+*--- 1c: Composition of all employment excluding agriculture ---
+* All workers (15-64), including no activity
+
+tabout activity_type_2018 total if sector_work_2018!=1 & working_age_2018==1 [iweight=indweight2018] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1("Non-ag Activity Type for 15-64, 2018")
+tabout activity_type_2021 total if sector_work_2021!=1 & working_age_2021==1 [iweight=indweight2021] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1("Non-ag Activity Type for 15-64, 2021")
+
+* Activity type excluding no activity
+tabout emp_type_2018 total if sector_work_2018!=1 & working_age_2018==1 [iweight=indweight2018] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1("Non-ag Activity Type 15-64, excluding no activity, 2018")
+tabout emp_type_2021 total if sector_work_2021!=1 & working_age_2021==1 [iweight=indweight2021] using "$output\Results.xls", append c(freq col row) format(0c 1p 1p) layout(cb) h1("Non-ag Activity Type 15-64 excluding no activity, 2021")
