@@ -1421,3 +1421,158 @@ local row = `row' + 1
 putexcel B`row' = "Enterprises with increased TFP"
 sum tfp_increased [aw=hhweight_2018] if ent_status==4
 putexcel C`row' = (r(mean) * 100), nformat("0.0")
+
+
+********************************************************************************
+* PART 12: SECTION 4 — TRANSITION TRAJECTORIES
+********************************************************************************
+
+di as text _n "=============================================="
+di as text "SECTION 4: TRANSITION TRAJECTORIES"
+di as text "=============================================="
+
+putexcel set "${xlout}", sheet("S4_Transitions") modify
+putexcel B1 = "Section 4: Transition Trajectories"
+
+local row = 3
+
+*--- Wage job to enterprise (ent_entry_source == 2) ---
+putexcel B`row' = "Transition: Wage Job (2018) → Enterprise (2021)"
+local row = `row' + 1
+
+* Compare 2021 enterprise profit with 2018 wage income
+gen byte _earn_compare = .
+replace _earn_compare = 1 if profit_2021 > total_emp_income_month_2018 & ///
+    !missing(profit_2021) & !missing(total_emp_income_month_2018) & ent_entry_source == 2
+replace _earn_compare = 2 if profit_2021 == total_emp_income_month_2018 & ///
+    !missing(profit_2021) & !missing(total_emp_income_month_2018) & ent_entry_source == 2
+replace _earn_compare = 3 if profit_2021 < total_emp_income_month_2018 & ///
+    !missing(profit_2021) & !missing(total_emp_income_month_2018) & ent_entry_source == 2
+
+putexcel B`row' = "Earning comparison" C`row' = "Share (%)"
+local row = `row' + 1
+
+foreach cat in 1 2 3 {
+    if `cat' == 1 local lbl = "Earning more as enterprise"
+    if `cat' == 2 local lbl = "Earning the same"
+    if `cat' == 3 local lbl = "Earning less as enterprise"
+    putexcel B`row' = "`lbl'"
+    gen byte _ec = (_earn_compare == `cat') if !missing(_earn_compare)
+    sum _ec [aw=hhweight_2018] if ent_entry_source == 2
+    local _N = r(N)
+    local _mean = r(mean)
+    if `_N' > 0 putexcel C`row' = (`_mean' * 100), nformat("0.0")
+    drop _ec
+    local row = `row' + 1
+}
+drop _earn_compare
+local row = `row' + 1
+
+*--- Enterprise to wage job ---
+putexcel B`row' = "Transition: Enterprise (2018) → Wage Job (2021)"
+local row = `row' + 1
+
+gen byte _ent_to_wage = (ent_2018 == 1 & activity_type_2021 == 2 & ind_matched == 1)
+
+putexcel B`row' = "Job Type" C`row' = "Share (%)" D`row' = "N"
+local row = `row' + 1
+
+* Public/private
+putexcel B`row' = "Public employer"
+sum public_employer_2021 [aw=hhweight_2018] if _ent_to_wage == 1
+if r(N) > 0 {
+    putexcel C`row' = (r(mean) * 100), nformat("0.0")
+    putexcel D`row' = r(N)
+}
+local row = `row' + 1
+
+putexcel B`row' = "Private employer"
+gen byte _priv = (public_employer_2021 == 0) if _ent_to_wage == 1 & !missing(public_employer_2021)
+sum _priv [aw=hhweight_2018] if _ent_to_wage == 1
+if r(N) > 0 putexcel C`row' = (r(mean) * 100), nformat("0.0")
+drop _priv
+local row = `row' + 1
+
+* Formal/informal (BEN: FNRB/CNSS pension contribution)
+putexcel B`row' = "Formal (FNRB/CNSS pension contribution)"
+sum formal_2021 [aw=hhweight_2018] if _ent_to_wage == 1
+if r(N) > 0 {
+    putexcel C`row' = (r(mean) * 100), nformat("0.0")
+    putexcel D`row' = r(N)
+}
+local row = `row' + 1
+
+putexcel B`row' = "Informal"
+gen byte _inf = (formal_2021 == 0) if _ent_to_wage == 1 & !missing(formal_2021)
+sum _inf [aw=hhweight_2018] if _ent_to_wage == 1
+if r(N) > 0 putexcel C`row' = (r(mean) * 100), nformat("0.0")
+drop _inf
+local row = `row' + 1
+
+* Sector of wage job
+putexcel B`row' = "Sector of wage job (2021)"
+local row = `row' + 1
+levelsof sector_work_2021 if _ent_to_wage == 1, local(sw_vals)
+foreach s of local sw_vals {
+    local lbl : label (sector_work_2021) `s'
+    putexcel B`row' = "`lbl' (`s')"
+    gen byte _sw = (sector_work_2021 == `s') if _ent_to_wage == 1 & !missing(sector_work_2021)
+    sum _sw [aw=hhweight_2018] if _ent_to_wage == 1
+    if r(N) > 0 putexcel C`row' = (r(mean) * 100), nformat("0.0")
+    drop _sw
+    local row = `row' + 1
+}
+local row = `row' + 1
+
+*--- Hours worked by transition type ---
+putexcel B`row' = "Hours Worked (2021) by Transition Type"
+local row = `row' + 1
+putexcel B`row' = "Transition" C`row' = "Avg Hours/Month"
+local row = `row' + 1
+
+putexcel B`row' = "Remained entrepreneur"
+sum hours_worked_month_2021 [aw=hhweight_2018] if ent_transition == 4
+if r(N) > 0 putexcel C`row' = r(mean), nformat("0.0")
+local row = `row' + 1
+
+putexcel B`row' = "Enterprise to wage job"
+sum hours_worked_month_2021 [aw=hhweight_2018] if _ent_to_wage == 1
+if r(N) > 0 putexcel C`row' = r(mean), nformat("0.0")
+local row = `row' + 1
+
+putexcel B`row' = "Wage job to enterprise"
+sum hours_worked_month_2021 [aw=hhweight_2018] if ent_entry_source == 2
+if r(N) > 0 putexcel C`row' = r(mean), nformat("0.0")
+local row = `row' + 1
+
+putexcel B`row' = "Inactive to enterprise"
+sum hours_worked_month_2021 [aw=hhweight_2018] if ent_entry_source == 4
+if r(N) > 0 putexcel C`row' = r(mean), nformat("0.0")
+local row = `row' + 2
+
+*--- Average HH members in wage jobs by transition type ---
+putexcel B`row' = "Avg HH Members in Wage Jobs (2021) by Transition Type"
+local row = `row' + 1
+putexcel B`row' = "Transition" C`row' = "Avg N wage earners in HH"
+local row = `row' + 1
+
+putexcel B`row' = "Remained entrepreneur"
+sum n_hh_wage_2021 [aw=hhweight_2018] if ent_transition == 4
+if r(N) > 0 putexcel C`row' = r(mean), nformat("0.00")
+local row = `row' + 1
+
+putexcel B`row' = "Enterprise to wage job"
+sum n_hh_wage_2021 [aw=hhweight_2018] if _ent_to_wage == 1
+if r(N) > 0 putexcel C`row' = r(mean), nformat("0.00")
+local row = `row' + 1
+
+putexcel B`row' = "Wage job to enterprise"
+sum n_hh_wage_2021 [aw=hhweight_2018] if ent_entry_source == 2
+if r(N) > 0 putexcel C`row' = r(mean), nformat("0.00")
+local row = `row' + 1
+
+putexcel B`row' = "Inactive to enterprise"
+sum n_hh_wage_2021 [aw=hhweight_2018] if ent_entry_source == 4
+if r(N) > 0 putexcel C`row' = r(mean), nformat("0.00")
+
+drop _ent_to_wage
