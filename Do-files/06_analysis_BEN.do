@@ -1037,3 +1037,297 @@ forvalues c = 1/5 {
     drop _pq
     local row = `row' + 1
 }
+
+
+********************************************************************************
+* PART 9: SECTION 4 — ENDOWMENTS AND VARIATION
+********************************************************************************
+
+di as text _n "=============================================="
+di as text "SECTION 4: ENDOWMENTS AND VARIATION"
+di as text "=============================================="
+
+putexcel set "${xlout}", sheet("S4_Endowments") modify
+putexcel B1 = "Section 4: Different Motives — Endowments and Variation"
+
+*--- 4a: Descriptive stats on endowments ---
+putexcel B3 = "Endowment Levels"
+putexcel B4 = "Variable" C4 = "Mean" D4 = "Median" E4 = "P10" F4 = "P90"
+
+local row = 5
+foreach yr in 2018 2021 {
+    putexcel B`row' = "Log capital `yr'"
+    sum log_capital_`yr' [aw=hhweight_`yr'] if ent_`yr' == 1, detail
+    putexcel C`row' = r(mean), nformat("0.00")
+    putexcel D`row' = r(p50),  nformat("0.00")
+    putexcel E`row' = r(p10),  nformat("0.00")
+    putexcel F`row' = r(p90),  nformat("0.00")
+    local row = `row' + 1
+
+    putexcel B`row' = "Log profit `yr'"
+    sum log_profit_`yr' [aw=hhweight_`yr'] if ent_`yr' == 1, detail
+    putexcel C`row' = r(mean), nformat("0.00")
+    putexcel D`row' = r(p50),  nformat("0.00")
+    putexcel E`row' = r(p10),  nformat("0.00")
+    putexcel F`row' = r(p90),  nformat("0.00")
+    local row = `row' + 1
+
+    putexcel B`row' = "Non-family employees `yr'"
+    sum num_emp_`yr' [aw=hhweight_`yr'] if ent_`yr' == 1, detail
+    putexcel C`row' = r(mean), nformat("0.00")
+    putexcel D`row' = r(p50),  nformat("0.00")
+    putexcel E`row' = r(p10),  nformat("0.00")
+    putexcel F`row' = r(p90),  nformat("0.00")
+    local row = `row' + 1
+}
+
+*--- 4b: Histograms (profitability and investment) ---
+
+* Profits 2018 (winsorized, in 1000 CFA)
+preserve
+    keep if ent_2018 == 1
+    sum profit_2018 [aw=hhweight_2018], d
+    replace profit_2018 = r(p99) if profit_2018 > r(p99) & profit_2018 < .
+    replace profit_2018 = r(p1)  if profit_2018 < r(p1)
+    gen profit_1k = profit_2018 / 1000
+    histogram profit_1k [fw=int(hhweight_2018)], bins(20) percent ///
+        color("60 168 158") lcolor("60 168 158") ///
+        xtitle("Monthly Profit (1000 CFA)") ///
+        title("Distribution of Profits, BEN 2018") ///
+        graphregion(color(white)) plotregion(fcolor(white)) ///
+        saving("${output}/hist_profit_2018", replace) ///
+        name(hist_profit_2018, replace)
+    graph export "${output}/hist_profit_2018.png", replace
+restore
+
+* Capital 2018 (winsorized, in 1000 CFA)
+preserve
+    keep if ent_2018 == 1
+    sum value_total_2018 [aw=hhweight_2018], d
+    replace value_total_2018 = 1000000 if value_total_2018 > 1000000 & value_total_2018 < .
+    gen capital_1k = value_total_2018 / 1000
+    histogram capital_1k [fw=int(hhweight_2018)], bins(20) percent ///
+        color("60 168 158") lcolor("60 168 158") ///
+        xtitle("Capital Value (1000 CFA)") ///
+        title("Distribution of Capital, BEN 2018") ///
+        graphregion(color(white)) plotregion(fcolor(white)) ///
+        saving("${output}/hist_capital_2018", replace) ///
+        name(hist_capital_2018, replace)
+    graph export "${output}/hist_capital_2018.png", replace
+restore
+
+* Change in profit (real, winsorized, in 1000 CFA)
+preserve
+    keep if ent_2018 == 1 & ent_2021 == 1 & ind_matched == 1
+    gen dprofit = profit_2021 - (profit_2018 * ${gdpdef_2021} / ${gdpdef_2018})
+    sum dprofit [aw=hhweight_2018], d
+    replace dprofit = r(p99) if dprofit > r(p99) & dprofit < .
+    replace dprofit = r(p1)  if dprofit < r(p1)
+    gen dprofit_1k = dprofit / 1000
+    histogram dprofit_1k [fw=int(hhweight)], bins(20) percent ///
+        color("60 168 158") lcolor("60 168 158") ///
+        xtitle("Change in Profit (1000 CFA)") ///
+        title("Distribution of Change in Profits, BEN 2018-2021") ///
+        graphregion(color(white)) plotregion(fcolor(white)) ///
+        saving("${output}/hist_dprofit", replace) ///
+        name(hist_dprofit, replace)
+    graph export "${output}/hist_dprofit.png", replace
+restore
+
+* Change in capital (real, in 1000 CFA)
+preserve
+    keep if ent_2018 == 1 & ent_2021 == 1 & ind_matched == 1
+    gen dcapital = value_total_2021 - (value_total_2018 * ${gdpdef_2021} / ${gdpdef_2018})
+    sum dcapital [aw=hhweight_2018], d
+    replace dcapital = r(p99) if dcapital > r(p99) & dcapital < .
+    replace dcapital = r(p1)  if dcapital < r(p1)
+    gen dcapital_1k = dcapital / 1000
+    histogram dcapital_1k [fw=int(hhweight)], bins(20) percent ///
+        color("60 168 158") lcolor("60 168 158") ///
+        xtitle("Change in Capital (1000 CFA)") ///
+        title("Distribution of Change in Capital, BEN 2018-2021") ///
+        graphregion(color(white)) plotregion(fcolor(white)) ///
+        saving("${output}/hist_dcapital", replace) ///
+        name(hist_dcapital, replace)
+    graph export "${output}/hist_dcapital.png", replace
+restore
+
+*--- 4c: Value added per worker ---
+
+local row = `row' + 2
+putexcel B`row' = "Value Added per Worker"
+local row = `row' + 1
+putexcel B`row' = "Measure" C`row' = "2018" D`row' = "2021"
+local row = `row' + 1
+
+putexcel B`row' = "Overall mean"
+sum va_per_worker_2018 [aw=hhweight_2018] if ent_2018 == 1
+putexcel C`row' = r(mean), nformat("#,##0")
+sum va_per_worker_2021 [aw=hhweight_2021] if ent_2021 == 1
+putexcel D`row' = r(mean), nformat("#,##0")
+local row = `row' + 1
+
+putexcel B`row' = "VA/worker by sector"
+local row = `row' + 1
+
+levelsof sector_2018 if ent_2018 == 1, local(svals_2018)
+levelsof sector_2021 if ent_2021 == 1, local(svals_2021)
+local all_svals : list svals_2018 | svals_2021
+local all_svals : list sort all_svals
+
+foreach s of local all_svals {
+    capture local lbl : label (sector_2021) `s'
+    if _rc != 0 capture local lbl : label (sector_2018) `s'
+    if _rc != 0 local lbl "`s'"
+    putexcel B`row' = "`lbl' (`s')"
+    sum va_per_worker_2018 [aw=hhweight_2018] if ent_2018 == 1 & sector_2018 == `s'
+    if r(N) > 0 putexcel C`row' = r(mean), nformat("#,##0")
+    sum va_per_worker_2021 [aw=hhweight_2021] if ent_2021 == 1 & sector_2021 == `s'
+    if r(N) > 0 putexcel D`row' = r(mean), nformat("#,##0")
+    local row = `row' + 1
+}
+
+* Histogram for VA per worker
+preserve
+    keep if ent_2018 == 1
+    sum va_per_worker_2018 [aw=hhweight_2018], d
+    replace va_per_worker_2018 = r(p99) if va_per_worker_2018 > r(p99) & va_per_worker_2018 < .
+    replace va_per_worker_2018 = r(p1)  if va_per_worker_2018 < r(p1)
+    gen va_1k = va_per_worker_2018 / 1000
+    histogram va_1k [fw=int(hhweight_2018)], bins(20) percent ///
+        color("60 168 158") lcolor("60 168 158") ///
+        xtitle("VA per Worker (1000 CFA)") ///
+        title("Value Added per Worker, BEN 2018") ///
+        graphregion(color(white)) plotregion(fcolor(white)) ///
+        saving("${output}/hist_va_2018", replace) ///
+        name(hist_va_2018, replace)
+    graph export "${output}/hist_va_2018.png", replace
+restore
+
+* Export histogram summary statistics to Excel
+putexcel set "${xlout}", sheet("S4_Histogram_Data") modify
+putexcel B1 = "Histogram Chart Data — Summary Statistics (Winsorized)"
+putexcel B3 = "Variable" C3 = "Mean" D3 = "Median" E3 = "SD" F3 = "P1" G3 = "P99" H3 = "N"
+
+local hrow = 4
+
+preserve
+    keep if ent_2018 == 1
+    sum profit_2018 [aw=hhweight_2018], d
+    replace profit_2018 = r(p99) if profit_2018 > r(p99) & profit_2018 < .
+    replace profit_2018 = r(p1)  if profit_2018 < r(p1)
+    gen profit_1k = profit_2018 / 1000
+    sum profit_1k [aw=hhweight_2018], d
+    putexcel B`hrow' = "Monthly Profit 2018 (1000 CFA)"
+    putexcel C`hrow' = r(mean), nformat("#,##0.0")
+    putexcel D`hrow' = r(p50),  nformat("#,##0.0")
+    putexcel E`hrow' = r(sd),   nformat("#,##0.0")
+    putexcel F`hrow' = r(min),  nformat("#,##0.0")
+    putexcel G`hrow' = r(max),  nformat("#,##0.0")
+    putexcel H`hrow' = r(N)
+restore
+local hrow = `hrow' + 1
+
+preserve
+    keep if ent_2018 == 1
+    sum value_total_2018 [aw=hhweight_2018], d
+    replace value_total_2018 = 1000000 if value_total_2018 > 1000000 & value_total_2018 < .
+    gen capital_1k = value_total_2018 / 1000
+    sum capital_1k [aw=hhweight_2018], d
+    putexcel B`hrow' = "Capital Value 2018 (1000 CFA)"
+    putexcel C`hrow' = r(mean), nformat("#,##0.0")
+    putexcel D`hrow' = r(p50),  nformat("#,##0.0")
+    putexcel E`hrow' = r(sd),   nformat("#,##0.0")
+    putexcel F`hrow' = r(min),  nformat("#,##0.0")
+    putexcel G`hrow' = r(max),  nformat("#,##0.0")
+    putexcel H`hrow' = r(N)
+restore
+local hrow = `hrow' + 1
+
+preserve
+    keep if ent_2018 == 1 & ent_2021 == 1 & ind_matched == 1
+    gen dprofit = profit_2021 - (profit_2018 * ${gdpdef_2021} / ${gdpdef_2018})
+    sum dprofit [aw=hhweight_2018], d
+    replace dprofit = r(p99) if dprofit > r(p99) & dprofit < .
+    replace dprofit = r(p1)  if dprofit < r(p1)
+    gen dprofit_1k = dprofit / 1000
+    sum dprofit_1k [aw=hhweight_2018], d
+    putexcel B`hrow' = "Change in Profit 2018-2021 (1000 CFA)"
+    putexcel C`hrow' = r(mean), nformat("#,##0.0")
+    putexcel D`hrow' = r(p50),  nformat("#,##0.0")
+    putexcel E`hrow' = r(sd),   nformat("#,##0.0")
+    putexcel F`hrow' = r(min),  nformat("#,##0.0")
+    putexcel G`hrow' = r(max),  nformat("#,##0.0")
+    putexcel H`hrow' = r(N)
+restore
+local hrow = `hrow' + 1
+
+preserve
+    keep if ent_2018 == 1 & ent_2021 == 1 & ind_matched == 1
+    gen dcapital = value_total_2021 - (value_total_2018 * ${gdpdef_2021} / ${gdpdef_2018})
+    sum dcapital [aw=hhweight_2018], d
+    replace dcapital = r(p99) if dcapital > r(p99) & dcapital < .
+    replace dcapital = r(p1)  if dcapital < r(p1)
+    gen dcapital_1k = dcapital / 1000
+    sum dcapital_1k [aw=hhweight_2018], d
+    putexcel B`hrow' = "Change in Capital 2018-2021 (1000 CFA)"
+    putexcel C`hrow' = r(mean), nformat("#,##0.0")
+    putexcel D`hrow' = r(p50),  nformat("#,##0.0")
+    putexcel E`hrow' = r(sd),   nformat("#,##0.0")
+    putexcel F`hrow' = r(min),  nformat("#,##0.0")
+    putexcel G`hrow' = r(max),  nformat("#,##0.0")
+    putexcel H`hrow' = r(N)
+restore
+local hrow = `hrow' + 1
+
+preserve
+    keep if ent_2018 == 1
+    sum va_per_worker_2018 [aw=hhweight_2018], d
+    replace va_per_worker_2018 = r(p99) if va_per_worker_2018 > r(p99) & va_per_worker_2018 < .
+    replace va_per_worker_2018 = r(p1)  if va_per_worker_2018 < r(p1)
+    gen va_1k = va_per_worker_2018 / 1000
+    sum va_1k [aw=hhweight_2018], d
+    putexcel B`hrow' = "VA per Worker 2018 (1000 CFA)"
+    putexcel C`hrow' = r(mean), nformat("#,##0.0")
+    putexcel D`hrow' = r(p50),  nformat("#,##0.0")
+    putexcel E`hrow' = r(sd),   nformat("#,##0.0")
+    putexcel F`hrow' = r(min),  nformat("#,##0.0")
+    putexcel G`hrow' = r(max),  nformat("#,##0.0")
+    putexcel H`hrow' = r(N)
+restore
+
+*--- 4d: Productivity change ---
+local row = `row' + 1
+putexcel B`row' = "Productivity Changes (Panel Enterprises)"
+local row = `row' + 1
+
+gen va_change = va_per_worker_2021 - va_per_worker_2018 ///
+    if ent_2018 == 1 & ent_2021 == 1 & ind_matched == 1
+
+gen byte prod_direction = .
+replace prod_direction = 1 if va_change > 0 & !missing(va_change)
+replace prod_direction = 2 if va_change == 0 & !missing(va_change)
+replace prod_direction = 3 if va_change < 0 & !missing(va_change)
+
+putexcel B`row' = "Direction" C`row' = "Share (%)"
+local row = `row' + 1
+
+gen byte _inc = (prod_direction == 1) if !missing(prod_direction)
+sum _inc [aw=hhweight_2018] if ent_2018 == 1 & ent_2021 == 1 & ind_matched == 1
+putexcel B`row' = "Productivity increased"
+putexcel C`row' = (r(mean) * 100), nformat("0.0")
+drop _inc
+local row = `row' + 1
+
+gen byte _same = (prod_direction == 2) if !missing(prod_direction)
+sum _same [aw=hhweight_2018] if ent_2018 == 1 & ent_2021 == 1 & ind_matched == 1
+putexcel B`row' = "Productivity unchanged"
+putexcel C`row' = (r(mean) * 100), nformat("0.0")
+drop _same
+local row = `row' + 1
+
+gen byte _dec = (prod_direction == 3) if !missing(prod_direction)
+sum _dec [aw=hhweight_2018] if ent_2018 == 1 & ent_2021 == 1 & ind_matched == 1
+putexcel B`row' = "Productivity decreased"
+putexcel C`row' = (r(mean) * 100), nformat("0.0")
+drop _dec
